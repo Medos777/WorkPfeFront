@@ -28,11 +28,6 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./frontend
+          context: ../..
           push: true
           tags: mohamedaminebenghouizia/my-react-app:latest
-          # Optionally add more tags for different versions
-          # tags: |
-          #   mohamedaminebenghouizia/my-react-app:latest
-          #   mohamedaminebenghouizia/my-react-app:${{ github.sha }}
-
