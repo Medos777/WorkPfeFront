@@ -44,7 +44,7 @@ export default function Login() {
                 setUserId(decodedToken.userId);
                 localStorage.setItem("role",role);
                 console.log(userId);
-        navigate('/dashboard');
+        navigate('/project');
             })
             .catch((error) => {
                 console.log("erreur", error);
