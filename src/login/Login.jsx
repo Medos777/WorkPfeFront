@@ -17,6 +17,10 @@ export default function Login() {
     const [userId, setUserId] = useState(null);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+    const handleSignUpClick = (event) => {
+        event.preventDefault();
+        navigate('/signup');
+    };
     const handleSubmit = (event) => {
         event.preventDefault();
         console.log({ email, password, role });
@@ -120,7 +124,7 @@ export default function Login() {
                         <Link href="#" variant="body2">
                             Forgot password?
                         </Link>
-                        <Link href="#" variant="body2">
+                        <Link href="#" onClick={handleSignUpClick} variant="body2">
                             Sign Up
                         </Link>
                     </Box>

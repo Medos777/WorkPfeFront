@@ -7,6 +7,7 @@ import Project from "./Project/AddProject";
 import AddProject from "./Project/AddProject";
 import ListProject from "./Project/ListProject";
 import UpdateProject from "./Project/UpdateProject";
+import SignUp from "./login/SignUp";
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
             <Route path="/projects/update/:projectId" element={<UpdateProject />} />
 
             <Route path="/project" element={<ListProject />} />
+            <Route path="/signup" element={<SignUp />} />
         </Routes>
       </Router>
   );
