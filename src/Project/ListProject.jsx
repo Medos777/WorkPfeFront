@@ -7,6 +7,7 @@ const ListProject = () => {
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [selectedProject, setSelectedProject] = useState(null); // To track the selected project
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -30,14 +31,10 @@ const ListProject = () => {
     };
 
     const handleUpdateProject = (projectId) => {
-        console.log('update project with ID:', projectId);
-
         navigate(`/projects/update/${projectId}`); // Navigates to the project update page
     };
 
     const handleDeleteProject = async (projectId) => {
-        console.log('Deleting project with ID:', projectId);
-
         if (window.confirm("Are you sure you want to delete this project?")) {
             try {
                 await ProjectService.deleteProject(projectId); // Call the corrected delete method
@@ -51,6 +48,14 @@ const ListProject = () => {
         }
     };
 
+    const handleSelectProject = (project) => {
+        setSelectedProject(project); // Set the selected project
+    };
+
+    const handleBackToList = () => {
+        setSelectedProject(null); // Reset the selected project to go back to the list
+    };
+
     return (
         <Container component="main" maxWidth="md">
             <Box
@@ -62,7 +67,7 @@ const ListProject = () => {
                 }}
             >
                 <Typography component="h1" variant="h5" sx={{ mb: 2 }}>
-                    Project List
+                    {selectedProject ? "Project Details" : "Project List"}
                 </Typography>
                 {loading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -72,11 +77,64 @@ const ListProject = () => {
                     <Alert severity="error" sx={{ mb: 2 }}>
                         {error}
                     </Alert>
+                ) : selectedProject ? (
+                    <Card>
+                        <CardContent>
+                            <Typography variant="h6">{selectedProject.ProjectName}</Typography>
+                            <Typography color="textSecondary">
+                                Start Date: {selectedProject.StartDate}
+                            </Typography>
+                            <Typography color="textSecondary">
+                                End Date: {selectedProject.EndDate}
+                            </Typography>
+                            <Typography variant="body2" sx={{ mt: 2 }}>
+                                {selectedProject.description}
+                            </Typography>
+                            <Typography variant="h6" sx={{ mt: 4 }}>Issues:</Typography>
+                            {selectedProject.issues && selectedProject.issues.length > 0 ? (
+                                <ul>
+                                    {selectedProject.issues.map((issue, index) => (
+                                        <li key={index}>
+                                            <Typography variant="body1">{issue}</Typography>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <Typography variant="body2" color="textSecondary">
+                                    No issues found.
+                                </Typography>
+                                )}
+                            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    onClick={() => handleUpdateProject(selectedProject._id)}
+                                >
+                                    Update
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    color="error"
+                                    onClick={() => handleDeleteProject(selectedProject._id)}
+                                >
+                                    Delete
+                                </Button>
+                                <Button
+                                    variant="outlined"
+                                    color="secondary"
+                                    onClick={handleBackToList}
+                                >
+                                    Back to List
+                                </Button>
+                            </Box>
+                        </CardContent>
+                    </Card>
                 ) : (
+                    // Show project list when no project is selected
                     <Grid container spacing={3}>
                         {projects.map((project) => (
                             <Grid item xs={12} sm={6} md={4} key={project._id}>
-                                <Card>
+                                <Card onClick={() => handleSelectProject(project)}>
                                     <CardContent>
                                         <Typography variant="h6" component="div">
                                             {project.ProjectName}
@@ -87,33 +145,19 @@ const ListProject = () => {
                                         <Typography variant="body2" sx={{ mt: 2 }}>
                                             {project.description}
                                         </Typography>
-                                        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
-                                            <Button
-                                                variant="contained"
-                                                color="primary"
-                                                onClick={() => handleUpdateProject(project._id)}
-                                            >
-                                                Update
-                                            </Button>
-                                            <Button
-                                                variant="contained"
-                                                color="error"
-                                                onClick={() => handleDeleteProject(project._id)}
-                                            >
-                                                Delete
-                                            </Button>
-                                        </Box>
                                     </CardContent>
                                 </Card>
                             </Grid>
                         ))}
                     </Grid>
                 )}
-                <Box sx={{ mt: 3 }}>
-                    <Button variant="contained" color="primary" onClick={handleAddNewProject}>
-                        Add New Project
-                    </Button>
-                </Box>
+                {!selectedProject && (
+                    <Box sx={{ mt: 3 }}>
+                        <Button variant="contained" color="primary" onClick={handleAddNewProject}>
+                            Add New Project
+                        </Button>
+                    </Box>
+                )}
             </Box>
         </Container>
     );

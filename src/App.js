@@ -8,6 +8,8 @@ import AddProject from "./Project/AddProject";
 import ListProject from "./Project/ListProject";
 import UpdateProject from "./Project/UpdateProject";
 import SignUp from "./login/SignUp";
+import TeamComponent from "./Team/TeamComponent";
+import Dashboard from "./Dashboard/Dashboard";
 
 function App() {
   return (
@@ -15,13 +17,14 @@ function App() {
         <Routes>
           {/* Define the route for the login page */}
           <Route path="/" element={<Login />} />
-          {/* Define the route for the dashboard page */}
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/Menu" element={<Menu />} />
           <Route path="/Addproject" element={<AddProject />} />
             <Route path="/projects/update/:projectId" element={<UpdateProject />} />
 
             <Route path="/project" element={<ListProject />} />
             <Route path="/signup" element={<SignUp />} />
+            <Route path="/team" element={<TeamComponent />} />
         </Routes>
       </Router>
   );

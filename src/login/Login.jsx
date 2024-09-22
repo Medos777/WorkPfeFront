@@ -43,12 +43,11 @@ export default function Login() {
                 console.log(userEmail);
                 setUserId(decodedToken.userId);
                 console.log(userId);
-                // Set the user ID in local storage.
                 localStorage.setItem("userId", userId);
                 setUserId(decodedToken.userId);
                 localStorage.setItem("role",role);
                 console.log(userId);
-        navigate('/project');
+        navigate('/dashboard');
             })
             .catch((error) => {
                 console.log("erreur", error);

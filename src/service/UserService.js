@@ -5,6 +5,9 @@ const getAll = () => {
 const getUser =  usersId => {
     return httpClient.get(`/users/id/${usersId}`);
 }
+const getUserByRole =  role => {
+    return httpClient.get(`/users/role/${role}`);
+}
 const create = ( userstData) => {
     return httpClient.post(`/users`, userstData);
 }
@@ -14,4 +17,4 @@ const update = ( usersId,usersData) => {
 const deleteUsers =  usersId =>{
     return httpClient.delete(`/users/${usersId}`);
 }
-export  default {getAll,create,deleteUsers,getUser,update}
+export  default {getAll,create,deleteUsers,getUser,update,getUserByRole}
