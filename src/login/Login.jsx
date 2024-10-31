@@ -1,10 +1,20 @@
-import React, { useState } from 'react';
+import React, {useEffect, useState} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Button, TextField, Typography, Container, Link, CssBaseline, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
 import loginservice from "../service/LoginService";
 
 import { toast, ToastContainer } from "react-toastify";
 import { jwtDecode } from "jwt-decode"; // Correct way to import
+
+export { logout };
+
+const logout = () => {
+    console.log("logout");
+    localStorage.removeItem("token");
+    localStorage.removeItem("isLoggedIn");
+
+
+};
 
 export default function Login() {
     const navigate = useNavigate();
@@ -21,6 +31,23 @@ export default function Login() {
         event.preventDefault();
         navigate('/signup');
     };
+    useEffect(() => {
+        // Get the token from local storage.
+        const token = localStorage.getItem("token");
+
+        // If the token exists, the user is logged in.
+        if (token) {
+            // Set the `isLoggedIn` state variable to `true`.
+            setIsLoggedIn(true);
+
+            // Navigate to the home page.
+            navigate("/teams");
+        } else {
+            // The user is not logged in.
+            // Set the `isLoggedIn` state variable to `false`.
+            setIsLoggedIn(false);
+        }
+    }, []);
     const handleSubmit = (event) => {
         event.preventDefault();
         console.log({ email, password, role });
@@ -35,7 +62,7 @@ export default function Login() {
                 localStorage.setItem("token", res.data.token);
                 const decodedToken = jwtDecode(res.data.token);
                 console.log("Decoded Token:", decodedToken);
-                const userEmail = decodedToken.UserEmail;
+                const userEmail = decodedToken.email;
                 const userId = decodedToken.userId;
                 const role = decodedToken.role;
                 console.log(userId);
@@ -47,7 +74,9 @@ export default function Login() {
                 setUserId(decodedToken.userId);
                 localStorage.setItem("role",role);
                 console.log(userId);
-        navigate('/dashboard');
+                console.log(localStorage.getItem("isLoggedIn"));
+
+                navigate('/dashboard');
             })
             .catch((error) => {
                 console.log("erreur", error);
