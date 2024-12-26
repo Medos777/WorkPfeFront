@@ -1,0 +1,9 @@
+.text-success {
+    color: #28a745; /* Green for upcoming */
+}
+.text-warning {
+    color: #ffc107; /* Yellow for ongoing */
+}
+.text-secondary {
+    color: #6c757d; /* Grey for completed/past */
+}

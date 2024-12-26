@@ -1,353 +1,275 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
     Box,
     Grid,
     Paper,
     Typography,
-    List,
-    ListItem,
-    ListItemText,
-    ListItemIcon,
-    Button,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    FormControl,
-    InputLabel,
-    MenuItem,
-    Select,
     TextField,
-    Chip,
+    Pagination,
+    Modal,
     Card,
     CardContent,
+    Button,
+    Tabs,
+    Tab,
     Avatar,
-} from '@mui/material';
+    Switch,
+    Tooltip,
+} from "@mui/material";
 import {
-    Dashboard as DashboardIcon,
-    AssignmentTurnedIn as TaskIcon,
-    TrendingUp as TrendingUpIcon,
-    Notifications as NotificationsIcon,
-    People as PeopleIcon,
     Add as AddIcon,
-} from '@mui/icons-material';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, Legend, ResponsiveContainer } from 'recharts';
-import TeamService from '../service/TeamService';
-import UserService from '../service/UserService';
-import ProjectService from '../service/ProjectService';
+    People as PeopleIcon,
+    Edit as EditIcon,
+    Delete as DeleteIcon,
+    BarChart as BarChartIcon,
+    PieChart as PieChartIcon,
+} from "@mui/icons-material";
+import {
+    BarChart,
+    Bar,
+    PieChart,
+    Pie,
+    Cell,
+    LineChart,
+    Line,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip as ChartTooltip,
+    Legend,
+    ResponsiveContainer,
+} from "recharts";
+import TeamService from "../service/TeamService";
+import UserService from "../service/UserService";
+import ProjectService from "../service/ProjectService";
+import { useNavigate } from "react-router-dom";
+import { createTheme, ThemeProvider } from "@mui/material/styles";
 
-// Mock data for the chart
-const performanceData = [
-    { name: 'Jan', Completed: 4000, Pending: 2400 },
-    { name: 'Feb', Completed: 3000, Pending: 1398 },
-    { name: 'Mar', Completed: 2000, Pending: 9800 },
-    { name: 'Apr', Completed: 2780, Pending: 3908 },
-    { name: 'May', Completed: 1890, Pending: 4800 },
-    { name: 'Jun', Completed: 2390, Pending: 3800 },
-];
+// Constants
+const ITEMS_PER_PAGE = 6;
+const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#d0ed57"];
+
+// Theme configuration
+const themeConfig = (darkMode) =>
+    createTheme({
+        palette: {
+            mode: darkMode ? "dark" : "light",
+        },
+    });
 
 const Dashboard = () => {
+    const [darkMode, setDarkMode] = useState(false);
     const [teams, setTeams] = useState([]);
-    const [newTeam, setNewTeam] = useState({
-        teamName: '',
-        teamLead: '',
-        members: [],
-        projects: [],
-    });
-    const [teamLeads, setTeamLeads] = useState([]);
     const [teamMembers, setTeamMembers] = useState([]);
     const [projects, setProjects] = useState([]);
-    const [openDialog, setOpenDialog] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [selectedTab, setSelectedTab] = useState(0);
+    const [searchQuery, setSearchQuery] = useState("");
 
-    const fetchData = async () => {
-        try {
-            const [teamsResponse, teamLeadsResponse, teamMembersResponse, projectsResponse] = await Promise.all([
-                TeamService.getAll(),
-                UserService.getUserByRole('manager'),
-                UserService.getUserByRole('developer'),
-                ProjectService.getAll(),
-            ]);
+    const navigate = useNavigate();
 
-            setTeams(teamsResponse.data);
-            setTeamLeads(teamLeadsResponse.data);
-            setTeamMembers(teamMembersResponse.data);
-            setProjects(projectsResponse.data);
-        } catch (error) {
-            console.error('Error fetching data:', error);
-        }
-    };
-
+    // Fetch data on component mount
     useEffect(() => {
         fetchData();
     }, []);
 
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setNewTeam((prevState) => ({
-            ...prevState,
-            [name]: value,
-        }));
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const fetchData = async () => {
         try {
-            await TeamService.createTeam(newTeam);
-            setNewTeam({
-                teamName: '',
-                teamLead: '',
-                members: [],
-                projects: [],
-            });
-            await fetchData();
-            setOpenDialog(false);
-        } catch (error) {
-            console.error('Error creating team:', error);
+            const [teamsRes, membersRes, projectsRes] = await Promise.all([
+                TeamService.getAll(),
+                UserService.getUserByRole("developer"),
+                ProjectService.getAll(),
+            ]);
+            setTeams(teamsRes.data);
+            setTeamMembers(membersRes.data);
+            setProjects(projectsRes.data);
+        } catch (err) {
+            console.error("Error fetching data:", err);
         }
     };
 
-    const handleOpenDialog = () => {
-        setOpenDialog(true);
-    };
+    const handleSearchChange = (e) => setSearchQuery(e.target.value);
+    const handleTabChange = (event, newValue) => setSelectedTab(newValue);
 
-    const handleCloseDialog = () => {
-        setOpenDialog(false);
-    };
+    // Filtered teams and members
+    const filteredTeams = teams.filter((team) =>
+        team.teamName.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    const filteredMembers = teamMembers.filter((member) =>
+        member.username.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    // Pagination for current tab
+    const paginatedItems =
+        selectedTab === 0
+            ? filteredTeams.slice(
+                (currentPage - 1) * ITEMS_PER_PAGE,
+                currentPage * ITEMS_PER_PAGE
+            )
+            : filteredMembers.slice(
+                (currentPage - 1) * ITEMS_PER_PAGE,
+                currentPage * ITEMS_PER_PAGE
+            );
+
+    // Prepare data for charts
+    const progressionChartData = projects.map((project) => ({
+        name: project.projectName,
+        Progress: Math.min(
+            100,
+            Math.max(
+                0,
+                ((Date.now() - new Date(project.startDate).getTime()) /
+                    (new Date(project.endDate).getTime() -
+                        new Date(project.startDate).getTime())) *
+                100
+            )
+        ),
+    }));
+
+    const projectStatusData = [
+        { name: "Completed", value: projects.filter((p) => p.status === "Completed").length },
+        { name: "Ongoing", value: projects.filter((p) => p.status === "Ongoing").length },
+        { name: "Upcoming", value: projects.filter((p) => p.status === "Upcoming").length },
+    ];
 
     return (
-        <Box sx={{ flexGrow: 1, p: 3 }}>
-            <Grid container spacing={3}>
+        <ThemeProvider theme={themeConfig(darkMode)}>
+            <Box sx={{ p: 3 }}>
                 {/* Header */}
-                <Grid item xs={12}>
-                    <Typography variant="h4" component="h1" gutterBottom>
-                        Project Dashboard
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                    <Typography variant="h4">Dashboard</Typography>
+                    <Box display="flex" alignItems="center" gap={2}>
+                        <Switch checked={darkMode} onChange={() => setDarkMode(!darkMode)} />
+                        <Typography>Dark Mode</Typography>
+                    </Box>
+                </Box>
+
+                {/* Stats Section */}
+                <Grid container spacing={3}>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <Paper sx={{ p: 2, textAlign: "center" }}>
+                            <Typography variant="h6">Total Projects</Typography>
+                            <Typography variant="h3">{projects.length}</Typography>
+                        </Paper>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <Paper sx={{ p: 2, textAlign: "center" }}>
+                            <Typography variant="h6">Total Teams</Typography>
+                            <Typography variant="h3">{teams.length}</Typography>
+                        </Paper>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <Paper sx={{ p: 2, textAlign: "center" }}>
+                            <Typography variant="h6">Total Members</Typography>
+                            <Typography variant="h3">{teamMembers.length}</Typography>
+                        </Paper>
+                    </Grid>
+                </Grid>
+
+                {/* Project Progression Chart */}
+                <Box mt={4}>
+                    <Typography variant="h6" mb={2}>
+                        Project Progression
                     </Typography>
-                </Grid>
+                    <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={progressionChartData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" />
+                            <YAxis />
+                            <ChartTooltip />
+                            <Legend />
+                            <Bar dataKey="Progress" fill="#8884d8" />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </Box>
 
-                {/* Quick Stats */}
-                <Grid item xs={12} md={3}>
-                    <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 140 }}>
-                        <Typography variant="h6" gutterBottom>
-                            Total Projects
-                        </Typography>
-                        <Typography variant="h3" component="div" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {projects.length}
-                        </Typography>
-                    </Paper>
-                </Grid>
-                <Grid item xs={12} md={3}>
-                    <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 140 }}>
-                        <Typography variant="h6" gutterBottom>
-                            Total Teams
-                        </Typography>
-                        <Typography variant="h3" component="div" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {teams.length}
-                        </Typography>
-                    </Paper>
-                </Grid>
-                <Grid item xs={12} md={3}>
-                    <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 140 }}>
-                        <Typography variant="h6" gutterBottom>
-                            Team Members
-                        </Typography>
-                        <Typography variant="h3" component="div" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {teamMembers.length}
-                        </Typography>
-                    </Paper>
-                </Grid>
-                <Grid item xs={12} md={3}>
-                    <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 140 }}>
-                        <Typography variant="h6" gutterBottom>
-                            Team Leads
-                        </Typography>
-                        <Typography variant="h3" component="div" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {teamLeads.length}
-                        </Typography>
-                    </Paper>
-                </Grid>
-
-                {/* Performance Chart */}
-                <Grid item xs={12} md={8}>
-                    <Paper sx={{ p: 2 }}>
-                        <Typography variant="h6" gutterBottom>
-                            Project Performance
-                        </Typography>
-                        <ResponsiveContainer width="100%" height={300}>
-                            <BarChart data={performanceData}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" />
-                                <YAxis />
-                                <ChartTooltip />
-                                <Legend />
-                                <Bar dataKey="Completed" fill="#8884d8" />
-                                <Bar dataKey="Pending" fill="#82ca9d" />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </Paper>
-                </Grid>
-
-                {/* Recent Activities */}
-                <Grid item xs={12} md={4}>
-                    <Paper sx={{ p: 2 }}>
-                        <Typography variant="h6" gutterBottom>
-                            Recent Activities
-                        </Typography>
-                        <List>
-                            <ListItem>
-                                <ListItemIcon>
-                                    <TaskIcon />
-                                </ListItemIcon>
-                                <ListItemText primary="Task 'Update UI' completed" secondary="2 hours ago" />
-                            </ListItem>
-                            <ListItem>
-                                <ListItemIcon>
-                                    <PeopleIcon />
-                                </ListItemIcon>
-                                <ListItemText primary="New team member added" secondary="5 hours ago" />
-                            </ListItem>
-                            <ListItem>
-                                <ListItemIcon>
-                                    <NotificationsIcon />
-                                </ListItemIcon>
-                                <ListItemText primary="Project deadline reminder" secondary="1 day ago" />
-                            </ListItem>
-                        </List>
-                    </Paper>
-                </Grid>
-
-                {/* Team Members */}
-                <Grid item xs={12}>
-                    <Paper sx={{ p: 2 }}>
-                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                            <Typography variant="h6" gutterBottom>
-                                Team Members
+                {/* Additional Charts */}
+                <Grid container spacing={3} mt={4}>
+                    <Grid item xs={12} md={6}>
+                        <Paper sx={{ p: 2 }}>
+                            <Typography variant="h6" mb={2}>
+                                Project Status Distribution
                             </Typography>
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                startIcon={<AddIcon />}
-                                onClick={handleOpenDialog}
-                            >
-                                Add Team
-                            </Button>
-                        </Box>
-                        <Grid container spacing={2}>
-                            {teamMembers.map((member) => (
-                                <Grid item xs={12} sm={6} md={3} key={member._id}>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <PieChart>
+                                    <Pie
+                                        data={projectStatusData}
+                                        dataKey="value"
+                                        nameKey="name"
+                                        cx="50%"
+                                        cy="50%"
+                                        outerRadius={120}
+                                        label
+                                    >
+                                        {projectStatusData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Legend />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </Paper>
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <Paper sx={{ p: 2 }}>
+                            <Typography variant="h6" mb={2}>
+                                Project Completion Over Time
+                            </Typography>
+                            <ResponsiveContainer width="100%" height={300}>
+                                <LineChart data={progressionChartData}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="name" />
+                                    <YAxis />
+                                    <ChartTooltip />
+                                    <Line type="monotone" dataKey="Progress" stroke="#8884d8" />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </Paper>
+                    </Grid>
+                </Grid>
+
+                {/* Teams & Members Widget */}
+                <Box mt={4}>
+                    <Tabs value={selectedTab} onChange={handleTabChange}>
+                        <Tab label="Teams" />
+                        <Tab label="Members" />
+                    </Tabs>
+                    <Box mt={3}>
+                        <Grid container spacing={3}>
+                            {paginatedItems.map((item) => (
+                                <Grid item xs={12} sm={6} md={4} key={item._id}>
                                     <Card>
-                                        <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                            <Avatar sx={{ width: 60, height: 60, mb: 2 }}>
-                                                {member.username.charAt(0).toUpperCase()}
-                                            </Avatar>
-                                            <Typography variant="subtitle1" gutterBottom>
-                                                {member.username}
+                                        <CardContent>
+                                            <Box display="flex" alignItems="center" mb={2}>
+                                                <Avatar sx={{ bgcolor: "primary.main", mr: 2 }}>
+                                                    {selectedTab === 0 ? <PeopleIcon /> : item.username.charAt(0)}
+                                                </Avatar>
+                                                <Typography variant="h6">
+                                                    {selectedTab === 0 ? item.teamName : item.username}
+                                                </Typography>
+                                            </Box>
+                                            <Typography>
+                                                {selectedTab === 0
+                                                    ? `Members: ${item.members?.length || 0}`
+                                                    : `Role: ${item.role}`}
                                             </Typography>
-                                            <Typography variant="body2" color="text.secondary">
-                                                Role: {member.role}
-                                            </Typography>
-                                            <Button variant="outlined" size="small" sx={{ mt: 2 }}>
-                                                View Profile
-                                            </Button>
                                         </CardContent>
                                     </Card>
                                 </Grid>
                             ))}
                         </Grid>
-                    </Paper>
-                </Grid>
-            </Grid>
-
-            {/* Add Team Dialog */}
-            <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-                <DialogTitle>Add New Team</DialogTitle>
-                <DialogContent>
-                    <form onSubmit={handleSubmit}>
-                        <TextField
-                            label="Team Name"
-                            name="teamName"
-                            value={newTeam.teamName}
-                            onChange={handleInputChange}
-                            variant="outlined"
-                            fullWidth
-                            margin="normal"
+                        <Pagination
+                            count={Math.ceil(
+                                (selectedTab === 0 ? filteredTeams : filteredMembers).length / ITEMS_PER_PAGE
+                            )}
+                            page={currentPage}
+                            onChange={(_, page) => setCurrentPage(page)}
+                            sx={{ mt: 3, display: "flex", justifyContent: "center" }}
                         />
-                        <FormControl variant="outlined" fullWidth margin="normal">
-                            <InputLabel id="team-lead-label">Team Lead</InputLabel>
-                            <Select
-                                labelId="team-lead-label"
-                                name="teamLead"
-                                value={newTeam.teamLead}
-                                onChange={handleInputChange}
-                                label="Team Lead"
-                            >
-                                <MenuItem value="">Select a team lead</MenuItem>
-                                {teamLeads.map((teamLead) => (
-                                    <MenuItem key={teamLead._id} value={teamLead._id}>
-                                        {teamLead.username}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-                        <FormControl variant="outlined" fullWidth margin="normal">
-                            <InputLabel id="members-label">Members</InputLabel>
-                            <Select
-                                labelId="members-label"
-                                name="members"
-                                multiple
-                                value={newTeam.members}
-                                onChange={handleInputChange}
-                                label="Members"
-                                renderValue={(selected) => (
-                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                        {selected.map((value) => (
-                                            <Chip key={value} label={teamMembers.find(member => member._id === value)?.username} />
-                                        ))}
-                                    </Box>
-                                )}
-                            >
-                                {teamMembers.map((member) => (
-                                    <MenuItem key={member._id} value={member._id}>
-                                        {member.username}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-                        <FormControl variant="outlined" fullWidth margin="normal">
-                            <InputLabel id="projects-label">Projects</InputLabel>
-                            <Select
-                                labelId="projects-label"
-                                name="projects"
-                                multiple
-                                value={newTeam.projects}
-                                onChange={handleInputChange}
-                                label="Projects"
-                                renderValue={(selected) => (
-                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                        {selected.map((value) => (
-                                            <Chip key={value} label={projects.find(project => project._id === value)?.ProjectName} />
-                                        ))}
-                                    </Box>
-                                )}
-                            >
-                                {projects.map((project) => (
-                                    <MenuItem key={project._id} value={project._id}>
-                                        {project.ProjectName}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-                    </form>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseDialog} color="primary">
-                        Cancel
-                    </Button>
-                    <Button onClick={handleSubmit} color="primary" variant="contained">
-                        Create Team
-                    </Button>
-                </DialogActions>
-            </Dialog>
-        </Box>
+                    </Box>
+                </Box>
+            </Box>
+        </ThemeProvider>
     );
 };
 

@@ -1,411 +1,365 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
     Box,
     Card,
     CardContent,
     Typography,
-    Container,
-    Grid,
     Button,
-    CircularProgress,
-    Alert,
-    Drawer,
-    AppBar,
-    Toolbar,
-    IconButton,
     TextField,
-    List,
-    ListItem,
-    ListItemText,
-    ListItemIcon,
-    Divider,
-    Paper,
+    Select,
+    MenuItem,
+    CircularProgress,
+    Switch,
+    LinearProgress,
+    Pagination,
+    Alert,
+    Modal,
+    Tooltip,
 } from '@mui/material';
-import {
-    Menu as MenuIcon,
-    Search as SearchIcon,
-    Add as AddIcon,
-    Settings as SettingsIcon,
-    StarBorder as StarIcon,
-    Dashboard as DashboardIcon,
-    AccessTime as TimeIcon,
-} from '@mui/icons-material';
-import ProjectService from "../service/ProjectService";
+import { Add, Delete } from '@mui/icons-material';
+import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import { useNavigate } from 'react-router-dom';
+import { createTheme, ThemeProvider } from '@mui/material/styles';
+import { saveAs } from 'file-saver';
+import projectService from '../service/ProjectService';
 
-const drawerWidth = 240;
+const ITEMS_PER_PAGE = 6;
+const STATUS_OPTIONS = ['All Statuses', 'Upcoming', 'Ongoing', 'Completed'];
+const SORT_OPTIONS = [
+    { value: '', label: 'Default' },
+    { value: 'startDateAsc', label: 'Start Date (Asc)' },
+    { value: 'startDateDesc', label: 'Start Date (Desc)' },
+    { value: 'progressAsc', label: 'Progress (Asc)' },
+    { value: 'progressDesc', label: 'Progress (Desc)' },
+];
+
+const ProjectCard = ({ project, provided, isDragging, onClick }) => {
+    const getProgress = () => {
+        const start = new Date(project.startDate).getTime();
+        const end = new Date(project.endDate).getTime();
+        const today = Date.now();
+        return Math.min(100, Math.max(0, ((today - start) / (end - start)) * 100));
+    };
+
+    const formatDate = (date) => {
+        return new Date(date).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+        });
+    };
+
+    return (
+        <Card
+            ref={provided.innerRef}
+            {...provided.draggableProps}
+            {...provided.dragHandleProps}
+            sx={{
+                margin: 1,
+                transition: 'all 0.3s ease',
+                transform: isDragging ? 'rotate(3deg) scale(1.02)' : 'none',
+                '&:hover': { boxShadow: 6 },
+            }}
+            onClick={onClick}
+        >
+            <CardContent>
+                <Typography variant="h6" gutterBottom>
+                    {project.projectName}
+                </Typography>
+                <Typography color="text.secondary">
+                    Start: {formatDate(project.startDate)}
+                </Typography>
+                <Typography color="text.secondary">
+                    End: {formatDate(project.endDate)}
+                </Typography>
+                <LinearProgress
+                    variant="determinate"
+                    value={getProgress()}
+                    sx={{ mt: 2 }}
+                />
+            </CardContent>
+        </Card>
+    );
+};
 
 const ListProject = () => {
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('All Statuses');
+    const [sortOption, setSortOption] = useState('');
+    const [darkMode, setDarkMode] = useState(false);
     const [selectedProject, setSelectedProject] = useState(null);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [drawerOpen, setDrawerOpen] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [openModal, setOpenModal] = useState(false);
+
     const navigate = useNavigate();
 
-    useEffect(() => {
-        const fetchProjects = async () => {
-            try {
-                const response = await ProjectService.getAll();
-                setProjects(response.data || []);
-            } catch (error) {
-                setError('Failed to fetch projects');
-                console.log(error);
-            } finally {
-                setLoading(false);
-            }
-        };
+    const theme = createTheme({
+        palette: {
+            mode: darkMode ? 'dark' : 'light',
+        },
+    });
 
-        fetchProjects();
+    useEffect(() => {
+        loadProjects();
     }, []);
 
-    const handleAddNewProject = () => {
-        navigate('/AddProject');
-    };
-
-    const handleUpdateProject = (projectId) => {
-        navigate(`/projects/update/${projectId}`);
-    };
-
-    const handleDeleteProject = async (projectId) => {
-        if (window.confirm("Are you sure you want to delete this project?")) {
-            try {
-                await ProjectService.deleteProject(projectId);
-                setProjects(projects.filter(project => project._id !== projectId));
-                setSelectedProject(null);
-                alert("Project deleted successfully.");
-            } catch (error) {
-                setError('Failed to delete project');
-                console.log(error);
-            }
+    const loadProjects = async () => {
+        try {
+            setLoading(true);
+            const response = await projectService.getAll();
+            setProjects(response.data || []);
+            setError(null);
+        } catch (err) {
+            setError(err.message || 'Failed to load projects');
+        } finally {
+            setLoading(false);
         }
     };
 
-    const getStatusColor = (startDate, endDate) => {
-        if (!startDate || !endDate) return '#757575'; // Default gray color for invalid dates
-
-        const now = new Date();
-        const end = new Date(endDate);
-        const start = new Date(startDate);
-
-        if (now > end) return '#ef4444';  // red
-        if (now < start) return '#3b82f6'; // blue
-        return '#22c55e'; // green
+    const getProgress = (project) => {
+        const start = new Date(project.startDate).getTime();
+        const end = new Date(project.endDate).getTime();
+        const today = Date.now();
+        return Math.min(100, Math.max(0, ((today - start) / (end - start)) * 100));
     };
 
-    // Function to safely check if a string contains a search term
-    const containsSearchTerm = (text, searchTerm) => {
-        if (!text) return false;
-        return text.toString().toLowerCase().includes(searchTerm.toLowerCase());
+    const handleDragEnd = async (result) => {
+        if (!result.destination) return;
+
+        const items = Array.from(projects);
+        const [reorderedItem] = items.splice(result.source.index, 1);
+        items.splice(result.destination.index, 0, reorderedItem);
+
+        setProjects(items);
+
+        try {
+            console.log('Reordered projects:', items);
+        } catch (err) {
+            console.error('Error updating project order:', err);
+        }
     };
 
-    const ProjectCard = ({ project }) => (
-        <Card
-            sx={{
-                cursor: 'pointer',
-                '&:hover': { boxShadow: 3 },
-                transition: 'box-shadow 0.2s'
-            }}
-            onClick={() => setSelectedProject(project)}
-        >
-            <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                    <Box display="flex" alignItems="center" gap={1}>
-                        <Box
-                            sx={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: '50%',
-                                backgroundColor: getStatusColor(project?.startDate, project?.endDate)
-                            }}
-                        />
-                        <Typography variant="h6" component="div">
-                            {project?.projectName || 'Untitled Project'}
-                        </Typography>
-                    </Box>
-                    <IconButton size="small">
-                        <SettingsIcon fontSize="small" />
-                    </IconButton>
-                </Box>
-                <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
-                    {project?.projectDescription || 'No description available'}
-                </Typography>
-                <Box display="flex" justifyContent="space-between" fontSize="0.875rem" color="text.secondary">
-                    <Typography variant="body2">
-                        Start: {project?.startDate ? new Date(project.startDate).toLocaleDateString() : 'Not set'}
-                    </Typography>
-                    <Typography variant="body2">
-                        Due: {project?.endDate ? new Date(project.endDate).toLocaleDateString() : 'Not set'}
-                    </Typography>
-                </Box>
-            </CardContent>
-        </Card>
-    );
+    const handleExport = () => {
+        const headers = 'Project Name,Start Date,End Date\n';
+        const csv = headers + projects.map((p) => {
+            const startDate = p.startDate && !isNaN(new Date(p.startDate)) ? new Date(p.startDate).toISOString() : 'N/A';
+            const endDate = p.endDate && !isNaN(new Date(p.endDate)) ? new Date(p.endDate).toISOString() : 'N/A';
+            return `${p.projectName || 'Unnamed Project'},${startDate},${endDate}`;
+        }).join('\n');
 
-    const filteredProjects = projects.filter(project => {
-        if (!project) return false;
-        return (
-            containsSearchTerm(project.projectName, searchTerm) ||
-            containsSearchTerm(project.projectDescription, searchTerm)
-        );
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        saveAs(blob, 'projects.csv');
+    };
+
+
+    const filteredProjects = projects.filter((project) => {
+        const matchesSearch = project.projectName?.toLowerCase().includes(searchQuery.toLowerCase());
+
+        if (statusFilter === 'All Statuses') return matchesSearch;
+
+        const today = new Date();
+        const startDate = new Date(project.startDate);
+        const endDate = new Date(project.endDate);
+
+        const status =
+            today < startDate ? 'Upcoming' :
+                today > endDate ? 'Completed' : 'Ongoing';
+
+        return matchesSearch && status === statusFilter;
     });
 
-    return (
-        <Box sx={{ display: 'flex' }}>
-            <AppBar
-                position="fixed"
-                sx={{
-                    zIndex: (theme) => theme.zIndex.drawer + 1,
-                    backgroundColor: 'white',
-                    color: 'text.primary'
-                }}
-            >
-                <Toolbar>
-                    <IconButton
-                        edge="start"
-                        color="inherit"
-                        onClick={() => setDrawerOpen(!drawerOpen)}
-                    >
-                        <MenuIcon />
-                    </IconButton>
-                    <TextField
-                        size="small"
-                        placeholder="Search projects..."
-                        variant="outlined"
-                        sx={{ ml: 2, flex: 1, maxWidth: 400 }}
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        InputProps={{
-                            startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                        }}
-                    />
-                    <Button
-                        variant="contained"
-                        startIcon={<AddIcon />}
-                        onClick={handleAddNewProject}
-                        sx={{ ml: 2 }}
-                    >
-                        Create Project
-                    </Button>
-                </Toolbar>
-            </AppBar>
+    const sortedProjects = [...filteredProjects].sort((a, b) => {
+        switch (sortOption) {
+            case 'startDateAsc':
+                return new Date(a.startDate) - new Date(b.startDate);
+            case 'startDateDesc':
+                return new Date(b.startDate) - new Date(a.startDate);
+            case 'progressAsc':
+                return getProgress(a) - getProgress(b);
+            case 'progressDesc':
+                return getProgress(b) - getProgress(a);
+            default:
+                return 0;
+        }
+    });
 
-            <Drawer
-                variant="persistent"
-                anchor="left"
-                open={drawerOpen}
-                sx={{
-                    width: drawerWidth,
-                    flexShrink: 0,
-                    '& .MuiDrawer-paper': {
-                        width: drawerWidth,
-                        boxSizing: 'border-box',
-                        top: '64px',
-                        height: 'calc(100% - 64px)'
-                    },
-                }}
-            >
-                <List>
-                    <ListItem button selected>
-                        <ListItemIcon><DashboardIcon /></ListItemIcon>
-                        <ListItemText primary="All Projects" />
-                    </ListItem>
-                    <ListItem button>
-                        <ListItemIcon><TimeIcon /></ListItemIcon>
-                        <ListItemText primary="Recent" />
-                    </ListItem>
-                    <ListItem button>
-                        <ListItemIcon><StarIcon /></ListItemIcon>
-                        <ListItemText primary="Starred" />
-                    </ListItem>
-                </List>
-            </Drawer>
+    const paginatedProjects = sortedProjects.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE,
+        currentPage * ITEMS_PER_PAGE
+    );
 
+    const renderModal = () => (
+        <Modal
+            open={openModal}
+            onClose={() => setOpenModal(false)}
+        >
             <Box
-                component="main"
                 sx={{
-                    flexGrow: 1,
-                    p: 3,
-                    mt: 8,
-                    ml: drawerOpen ? `${drawerWidth}px` : 0,
-                    transition: 'margin 0.2s',
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: 400,
+                    bgcolor: 'background.paper',
+                    boxShadow: 24,
+                    p: 4,
+                    borderRadius: 2,
                 }}
             >
-                {loading ? (
-                    <Box display="flex" justifyContent="center" mt={4}>
-                        <CircularProgress />
-                    </Box>
-                ) : error ? (
-                    <Alert severity="error" sx={{ mb: 2 }}>
-                        {error}
-                    </Alert>
-                ) : selectedProject ? (
-                    <Paper sx={{ p: 3 }}>
-                        <Box display="flex" justifyContent="space-between" alignItems="start" mb={4}>
-                            <Box>
-                                <Typography variant="h4" gutterBottom>
-                                    {selectedProject.projectName || 'Untitled Project'}
-                                </Typography>
-                                <Typography color="text.secondary">
-                                    {selectedProject.projectDescription || 'No description available'}
-                                </Typography>
-                            </Box>
-                            <Box display="flex" gap={1}>
-                                <Button
-                                    variant="contained"
-                                    onClick={() => handleUpdateProject(selectedProject._id)}
-                                >
-                                    Edit
-                                </Button>
-                                <Button
-                                    variant="contained"
-                                    color="error"
-                                    onClick={() => handleDeleteProject(selectedProject._id)}
-                                >
-                                    Delete
-                                </Button>
-                                <Button
-                                    variant="outlined"
-                                    onClick={() => setSelectedProject(null)}
-                                >
-                                    Back
-                                </Button>
-                            </Box>
+                {selectedProject && (
+                    <>
+                        <Typography variant="h6" gutterBottom>
+                            {selectedProject.projectName}
+                        </Typography>
+                        <Typography>
+                            {selectedProject.description || 'No description available.'}
+                        </Typography>
+                        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                            <Button
+                                variant="outlined"
+                                onClick={() => navigate(`/projects/update/${selectedProject._id}`)}
+                            >
+                                Edit
+                            </Button>
+                            <Button
+                                variant="contained"
+                                onClick={() => setOpenModal(false)}
+                            >
+                                Close
+                            </Button>
                         </Box>
-
-                        <Grid container spacing={3}>
-                            <Grid item xs={12} md={6}>
-                                <Paper sx={{ p: 2 }}>
-                                    <Typography variant="h6" gutterBottom>Timeline</Typography>
-                                    <Box display="flex" justifyContent="space-between" mb={1}>
-                                        <Typography color="text.secondary">Start Date</Typography>
-                                        <Typography>
-                                            {selectedProject.startDate
-                                                ? new Date(selectedProject.startDate).toLocaleDateString()
-                                                : 'Not set'}
-                                        </Typography>
-                                    </Box>
-                                    <Box display="flex" justifyContent="space-between">
-                                        <Typography color="text.secondary">End Date</Typography>
-                                        <Typography>
-                                            {selectedProject.endDate
-                                                ? new Date(selectedProject.endDate).toLocaleDateString()
-                                                : 'Not set'}
-                                        </Typography>
-                                    </Box>
-                                </Paper>
-                            </Grid>
-                            <Grid item xs={12} md={6}>
-
-                                <Paper sx={{ p: 2 }}>
-                                    <Typography variant="h6" gutterBottom>Team Information</Typography>
-                                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                                        {/* Project Lead Information */}
-                                        <Box>
-                                            <Box display="flex" justifyContent="space-between" mb={1} alignItems="center">
-                                                <Typography color="text.secondary">Project Lead</Typography>
-                                                <Box sx={{ textAlign: 'right' }}>
-                                                    {selectedProject.projectLead ? (
-                                                        <>
-                                                            <Typography>
-                                                                {selectedProject.projectLead.username || selectedProject.projectLead.username}
-                                                            </Typography>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                ID: {selectedProject.projectLead._id}
-                                                            </Typography>
-                                                        </>
-                                                    ) : (
-                                                        <Typography color="warning.main">Not assigned</Typography>
-                                                    )}
-                                                </Box>
-                                            </Box>
-                                            <Divider />
-                                        </Box>
-
-                                        {/* Team Information */}
-                                        <Box>
-                                            <Box display="flex" justifyContent="space-between" mb={1} alignItems="center">
-                                                <Typography color="text.secondary">Team</Typography>
-                                                <Box sx={{ textAlign: 'right' }}>
-                                                    {selectedProject.team ? (
-                                                        <>
-                                                            <Typography>
-                                                                {selectedProject.team.teamName || selectedProject.team.teamName}
-                                                            </Typography>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                ID: {selectedProject.team._id}
-                                                            </Typography>
-                                                        </>
-                                                    ) : (
-                                                        <Typography color="warning.main">Not assigned</Typography>
-                                                    )}
-                                                </Box>
-                                            </Box>
-                                            <Divider />
-                                        </Box>
-
-                                        {/* Team Status */}
-                                        <Box>
-                                            <Box display="flex" justifyContent="space-between" alignItems="center">
-                                                <Typography color="text.secondary">Team Status</Typography>
-                                                <Box sx={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: 1,
-                                                    backgroundColor: (theme) => theme.palette.grey[100],
-                                                    padding: '4px 12px',
-                                                    borderRadius: '16px'
-                                                }}>
-                                                    <Box
-                                                        sx={{
-                                                            width: 8,
-                                                            height: 8,
-                                                            borderRadius: '50%',
-                                                            backgroundColor: getStatusColor(selectedProject?.startDate, selectedProject?.endDate)
-                                                        }}
-                                                    />
-                                                    <Typography variant="body2">
-                                                        {(() => {
-                                                            const now = new Date();
-                                                            const end = new Date(selectedProject?.endDate);
-                                                            const start = new Date(selectedProject?.startDate);
-
-                                                            if (now > end) return 'Completed';
-                                                            if (now < start) return 'Not Started';
-                                                            return 'In Progress';
-                                                        })()}
-                                                    </Typography>
-                                                </Box>
-                                            </Box>
-                                        </Box>
-
-                                        {selectedProject.team && selectedProject.team.members && (
-                                            <Box>
-                                                <Box display="flex" justifyContent="space-between" alignItems="center">
-                                                    <Typography color="text.secondary">Team Members</Typography>
-                                                    <Typography>
-                                                        {selectedProject.team.members.length} members
-                                                    </Typography>
-                                                </Box>
-                                            </Box>
-                                        )}
-                                    </Box>
-                                </Paper>
-                            </Grid>
-                        </Grid>
-                    </Paper>
-                ) : (
-                    <Grid container spacing={3}>
-                        {filteredProjects.map((project) => (
-                            <Grid item xs={12} sm={6} md={4} key={project?._id || Math.random()}>
-                                <ProjectCard project={project} />
-                            </Grid>
-                        ))}
-                    </Grid>
+                    </>
                 )}
             </Box>
-        </Box>
+        </Modal>
+    );
+
+    if (loading) {
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    return (
+        <ThemeProvider theme={theme}>
+            <Box sx={{ p: 3 }}>
+                {/* Header */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+                    <Typography variant="h4">Project Management</Typography>
+                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                        <Tooltip title="Export projects as CSV">
+                            <Button onClick={handleExport} variant="outlined">
+                                Export CSV
+                            </Button>
+                        </Tooltip>
+                        <Tooltip title="Toggle light/dark mode">
+                            <Switch
+                                checked={darkMode}
+                                onChange={() => setDarkMode(!darkMode)}
+                            />
+                        </Tooltip>
+                        <Tooltip title="Create a new project">
+                            <Button
+                                startIcon={<Add />}
+                                variant="contained"
+                                onClick={() => navigate('/projects/add')}
+                            >
+                                New Project
+                            </Button>
+                        </Tooltip>
+                    </Box>
+                </Box>
+
+                {/* Filters */}
+                <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+                    <TextField
+                        label="Search Projects"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        sx={{ flexGrow: 1 }}
+                    />
+                    <Select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        sx={{ width: 200 }}
+                    >
+                        {STATUS_OPTIONS.map((status) => (
+                            <MenuItem key={status} value={status}>
+                                {status}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                    <Select
+                        value={sortOption}
+                        onChange={(e) => setSortOption(e.target.value)}
+                        sx={{ width: 200 }}
+                    >
+                        {SORT_OPTIONS.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </Box>
+
+                {/* Projects */}
+                <DragDropContext onDragEnd={handleDragEnd}>
+                    <Droppable droppableId="projects">
+                        {(provided) => (
+                            <Box
+                                ref={provided.innerRef}
+                                {...provided.droppableProps}
+                                sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                                    gap: 2,
+                                    minHeight: 400,
+                                }}
+                            >
+                                {paginatedProjects.map((project, index) => (
+                                    <Draggable
+                                        key={project._id}
+                                        draggableId={String(project._id)}
+                                        index={index}
+                                    >
+                                        {(provided, snapshot) => (
+                                            <ProjectCard
+                                                project={project}
+                                                provided={provided}
+                                                isDragging={snapshot.isDragging}
+                                                onClick={() => {
+                                                    setSelectedProject(project);
+                                                    setOpenModal(true);
+                                                }}
+                                            />
+                                        )}
+                                    </Draggable>
+                                ))}
+                                {provided.placeholder}
+                            </Box>
+                        )}
+                    </Droppable>
+                </DragDropContext>
+
+                {/* Pagination */}
+                {paginatedProjects.length > 0 && (
+                    <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+                        <Pagination
+                            count={Math.ceil(sortedProjects.length / ITEMS_PER_PAGE)}
+                            page={currentPage}
+                            onChange={(_, page) => setCurrentPage(page)}
+                        />
+                    </Box>
+                )}
+
+                {renderModal()}
+            </Box>
+        </ThemeProvider>
     );
 };
 
