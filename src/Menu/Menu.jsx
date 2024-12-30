@@ -23,7 +23,8 @@ import {
     Brightness7,
 } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
-import { io } from 'socket.io-client'; // Import socket.io-client
+import { io } from 'socket.io-client';
+import {logout} from "../login/Login"; // Import socket.io-client
 
 const Menu = ({ darkMode, toggleDarkMode }) => {
     const [anchorEl, setAnchorEl] = useState(null);
@@ -55,7 +56,9 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
 
     const handleMenuClose = () => {
         setAnchorEl(null);
+
     };
+
 
     const menuItems = [
         { label: 'Home', path: '/', icon: <Home /> },
@@ -63,8 +66,14 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
         { label: 'Teams', path: '/team', icon: <Group /> },
         { label: 'Sprints', path: '/sprints', icon: <Assignment /> },
         { label: 'Issues', path: '/issues', icon: <BugReport /> },
+        { label: 'Backlog', path: '/backlog', icon: <BugReport /> },
     ];
-
+    const handleLogout = () => {
+        logout();
+//        window.location.reload()
+        // localStorage.clear()
+        socket.current.disconnect();
+    };
     return (
         <AppBar position="static">
             <Toolbar>
@@ -127,7 +136,7 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
                     <MenuItem onClick={handleMenuClose}>
                         <Typography variant="body1">Settings</Typography>
                     </MenuItem>
-                    <MenuItem onClick={handleMenuClose}>
+                    <MenuItem onClick={() => { handleLogout(); window.location.reload(); }}>
                         <Typography variant="body1">Logout</Typography>
                     </MenuItem>
                 </MuiMenu>

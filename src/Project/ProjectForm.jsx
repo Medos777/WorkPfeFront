@@ -13,6 +13,7 @@ import {
     FormControl,
     Alert,
     Snackbar,
+    Tooltip,
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import TeamService from '../service/TeamService';
@@ -26,7 +27,10 @@ function ProjectForm({ isEdit = false, projectData = null }) {
         startDate: '',
         endDate: '',
         projectLead: '',
-        team: '',
+        createdBy: localStorage.getItem('userId'),
+        teams: [],
+        budget: '',
+        costEstimate: '',
     });
     const [loading, setLoading] = useState(false);
     const [teams, setTeams] = useState([]);
@@ -37,9 +41,8 @@ function ProjectForm({ isEdit = false, projectData = null }) {
 
     const navigate = useNavigate();
     const { projectId } = useParams();
+    const currentUser = localStorage.getItem('userId');
 
-    // Fetch the current user from localStorage or a context
-    const currentUser =localStorage.getItem("userId");
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
@@ -65,7 +68,10 @@ function ProjectForm({ isEdit = false, projectData = null }) {
                             ? new Date(project.endDate).toISOString().split('T')[0]
                             : '',
                         projectLead: project.projectLead?._id || project.projectLead || '',
-                        team: project.team?._id || project.team || '',
+                        teams: project.teams || [],
+                        budget: project.budget || '',
+                        costEstimate: project.costEstimate || '',
+                        createdBy: currentUser,
                     });
                     setInitialLoad(false);
                 }
@@ -88,6 +94,14 @@ function ProjectForm({ isEdit = false, projectData = null }) {
         }));
     };
 
+    const handleTeamChange = (event) => {
+        const { value } = event.target;
+        setFormData((prevData) => ({
+            ...prevData,
+            teams: value,
+        }));
+    };
+
     const validateForm = () => {
         if (!formData.projectName.trim()) return 'Project Name is required';
         if (!formData.projectDescription.trim()) return 'Project Description is required';
@@ -96,7 +110,10 @@ function ProjectForm({ isEdit = false, projectData = null }) {
         if (new Date(formData.endDate) <= new Date(formData.startDate))
             return 'End Date must be after Start Date';
         if (!formData.projectLead) return 'Project Lead is required';
-        if (!formData.team) return 'Team selection is required';
+        if (formData.budget && isNaN(Number(formData.budget)))
+            return 'Budget must be a valid number';
+        if (formData.costEstimate && isNaN(Number(formData.costEstimate)))
+            return 'Cost Estimate must be a valid number';
         return null;
     };
 
@@ -116,7 +133,7 @@ function ProjectForm({ isEdit = false, projectData = null }) {
         try {
             const payload = {
                 ...formData,
-                createdBy: currentUser._id, // Add the current user ID as `createdBy`
+                createdBy: currentUser,
             };
 
             let response;
@@ -153,11 +170,9 @@ function ProjectForm({ isEdit = false, projectData = null }) {
     }
 
     return (
-        <Container component="main" maxWidth="xs">
+        <Container component="main" maxWidth="md">
             <CssBaseline />
-            <Box
-                sx={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}
-            >
+            <Box sx={{ marginTop: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <Typography component="h1" variant="h5" sx={{ mb: 2 }}>
                     {isEdit ? 'Update Project' : 'Create New Project'}
                 </Typography>
@@ -227,14 +242,15 @@ function ProjectForm({ isEdit = false, projectData = null }) {
                         </Select>
                     </FormControl>
                     <FormControl fullWidth margin="normal">
-                        <InputLabel id="team-label">Select Team</InputLabel>
+                        <InputLabel id="teams-label">Select Teams</InputLabel>
                         <Select
-                            labelId="team-label"
-                            id="team"
-                            name="team"
-                            value={formData.team}
-                            label="Select Team"
-                            onChange={handleChange}
+                            labelId="teams-label"
+                            id="teams"
+                            name="teams"
+                            multiple
+                            value={formData.teams}
+                            label="Select Teams"
+                            onChange={handleTeamChange}
                             required
                         >
                             {teams.map((team) => (
@@ -244,6 +260,26 @@ function ProjectForm({ isEdit = false, projectData = null }) {
                             ))}
                         </Select>
                     </FormControl>
+                    <TextField
+                        margin="normal"
+                        fullWidth
+                        id="budget"
+                        label="Budget"
+                        name="budget"
+                        type="number"
+                        value={formData.budget}
+                        onChange={handleChange}
+                    />
+                    <TextField
+                        margin="normal"
+                        fullWidth
+                        id="costEstimate"
+                        label="Cost Estimate"
+                        name="costEstimate"
+                        type="number"
+                        value={formData.costEstimate}
+                        onChange={handleChange}
+                    />
                     <Button
                         type="submit"
                         fullWidth

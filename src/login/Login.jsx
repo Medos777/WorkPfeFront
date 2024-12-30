@@ -48,6 +48,13 @@ export default function Login() {
             setIsLoggedIn(false);
         }
     }, []);
+    const logout = () => {
+        console.log("logout");
+        localStorage.removeItem("token");
+        localStorage.removeItem("isLoggedIn");
+
+
+    };
     const handleSubmit = (event) => {
         event.preventDefault();
         console.log({ email, password, role });
