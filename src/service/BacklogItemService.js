@@ -1,61 +1,23 @@
 import httpClient from '../http-common';
 
-// Fetch all backlog items
-const getAll = async () => {
-    try {
-        const response = await httpClient.get('/BacklogItems');
-        return response.data;
-    } catch (error) {
-        console.error('Error fetching backlog items:', error);
-        throw error;
-    }
+const getAll = () => {
+    return httpClient.get('/BacklogItems');
 };
 
-// Fetch backlog items by Backlog ID
-const getByBacklogId = async (backlogId) => {
-    try {
-        const response = await httpClient.get(`/BacklogItems/id/${backlogId}`);
-        return response.data;
-    } catch (error) {
-        console.error(`Error fetching backlog items for backlog ID: ${backlogId}`, error);
-        throw error;
-    }
+const getBacklogItems = (BacklogsId) => {
+    return httpClient.get(`/BacklogItems/id/${BacklogsId}`);
 };
 
-// Create a new backlog item
-const create = async (backlogData) => {
-    try {
-        const response = await httpClient.post('/BacklogItems', backlogData);
-        return response.data;
-    } catch (error) {
-        console.error('Error creating backlog item:', error);
-        throw error;
-    }
+const create = (BacklogsData) => {
+    return httpClient.post('/BacklogItems', BacklogsData);
 };
 
-// Update a backlog item
-const update = async (backlogId, backlogData) => {
-    try {
-        const response = await httpClient.put(`/BacklogItems/${backlogId}`, backlogData);
-        return response.data;
-    } catch (error) {
-        console.error(`Error updating backlog item with ID: ${backlogId}`, error);
-        throw error;
-    }
+const update = (BacklogsId, BacklogsData) => {
+    return httpClient.put(`/BacklogItems/${BacklogsId}`, BacklogsData);
 };
 
-// Delete a backlog item
-const deleteById = async (backlogId) => {
-    try {
-        const response = await httpClient.delete(`/BacklogItems/${backlogId}`);
-        return response.data;
-    } catch (error) {
-        console.error(`Error deleting backlog item with ID: ${backlogId}`, error);
-        throw error;
-    }
+const deleteBacklogItems = (BacklogsId) => {
+    return httpClient.delete(`/BacklogItems/${BacklogsId}`);
 };
 
-// Additional helper functions can be added here (e.g., filtering by type or status)
-
-// Exporting functions as named exports
-export default { getAll, getByBacklogId, create, update, deleteById };
+export default { getAll, create, deleteBacklogItems, getBacklogItems, update };

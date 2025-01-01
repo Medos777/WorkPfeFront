@@ -1,132 +1,232 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
     Box,
     Typography,
-    Button,
-    Grid,
     Card,
     CardContent,
+    CardActions,
+    Button,
+    Grid,
     CircularProgress,
     Alert,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
-    Pagination,
-} from '@mui/material';
-import AddBacklog from './AddBacklog';
-import backlogService from '../service/BacklogService';
+    Tooltip,
+    IconButton,
+    Divider,
+    Chip,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField,
+} from "@mui/material";
+import {
+    SaveAlt as SaveAltIcon,
+    Delete as DeleteIcon,
+    Edit as EditIcon,
+    Add as AddIcon,
+} from "@mui/icons-material";
+import backlogService from "../service/BacklogService";
+import backlogItemService from "../service/BacklogItemService";
+import { saveAs } from "file-saver";
+import AddBacklog from "./AddBacklog"; // Import AddBacklog
 
 const ListBacklog = () => {
     const [backlogs, setBacklogs] = useState([]);
+    const [backlogItems, setBacklogItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [openDialog, setOpenDialog] = useState(false);
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 6;
-
-    const fetchBacklogs = async () => {
-        try {
-            setLoading(true);
-            const response = await backlogService.getAll();
-            setBacklogs(response.data || []);
-            setError(null);
-        } catch (err) {
-            setError('Failed to fetch backlogs');
-        } finally {
-            setLoading(false);
-        }
-    };
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [addDialogOpen, setAddDialogOpen] = useState(false);
+    const [selectedBacklog, setSelectedBacklog] = useState(null);
+    const [editedBacklogName, setEditedBacklogName] = useState("");
 
     useEffect(() => {
         fetchBacklogs();
     }, []);
 
-    const handleBacklogCreated = () => {
-        fetchBacklogs();
+    const fetchBacklogs = async () => {
+        try {
+            setLoading(true);
+            const [backlogsResponse, itemsResponse] = await Promise.all([
+                backlogService.getAll(),
+                backlogItemService.getAll(),
+            ]);
+            setBacklogs(backlogsResponse.data || []);
+            setBacklogItems(itemsResponse.data || []);
+        } catch (err) {
+            setError("Failed to fetch backlogs. Please try again later.");
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const paginatedBacklogs = backlogs.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-    );
+    const exportToCSV = (backlog) => {
+        const headers = "Backlog Name,Project,Item Title,Item Description,Item Type,Item Status\n";
+        const items = backlog.items
+            .map((itemId) => {
+                const item = backlogItems.find((item) => item._id === itemId);
+                if (!item) return null;
+                return `${backlog.name},${backlog.project?.projectName || "No Project"},${item.title},${item.description},${item.type},${item.status}`;
+            })
+            .filter(Boolean)
+            .join("\n");
+
+        const csv = headers + items;
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        saveAs(blob, `${backlog.name.replace(/\s+/g, "_")}_backlog.csv`);
+    };
+
+    const handleEditBacklog = (backlog) => {
+        setSelectedBacklog(backlog);
+        setEditedBacklogName(backlog.name);
+        setEditDialogOpen(true);
+    };
+
+    const handleEditSave = async () => {
+        try {
+            await backlogService.update(selectedBacklog._id, { name: editedBacklogName });
+            setEditDialogOpen(false);
+            fetchBacklogs();
+        } catch (err) {
+            setError("Failed to update backlog. Please try again.");
+        }
+    };
+
+    const handleDeleteBacklog = async (id) => {
+        try {
+            await backlogService.deleteacklog(id);
+            fetchBacklogs();
+        } catch (err) {
+            setError("Failed to delete backlog. Please try again.");
+        }
+    };
+
+    const handleAddBacklogOpen = () => setAddDialogOpen(true);
+
+    const handleAddBacklogClose = () => setAddDialogOpen(false);
+
+    const handleBacklogCreated = () => {
+        fetchBacklogs();
+        handleAddBacklogClose();
+    };
+
+    if (loading) {
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    if (error) {
+        return (
+            <Box p={3}>
+                <Alert severity="error">{error}</Alert>
+            </Box>
+        );
+    }
 
     return (
-        <Box>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-                <Typography variant="h4" sx={{ fontWeight: 'bold' }}>Backlogs</Typography>
-                <Button variant="contained" onClick={() => setOpenDialog(true)} sx={{ fontWeight: 'bold' }}>
-                    Add Backlog
-                </Button>
+        <Box sx={{ p: 3 }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                <Typography variant="h4" gutterBottom>
+                    Backlogs
+                </Typography>
+                <Tooltip title="Add New Backlog">
+                    <IconButton color="primary" onClick={handleAddBacklogOpen}>
+                        <AddIcon />
+                    </IconButton>
+                </Tooltip>
             </Box>
-            {loading ? (
-                <Box display="flex" justifyContent="center" alignItems="center">
-                    <CircularProgress />
-                </Box>
-            ) : error ? (
-                <Alert severity="error">{error}</Alert>
-            ) : (
-                <>
-                    <Grid container spacing={2}>
-                        {paginatedBacklogs.map((backlog) => (
-                            <Grid item xs={12} sm={12} md={6} key={backlog._id}>
-                                <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
-                                    <CardContent>
-                                        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                                            {backlog.name}
+            <Grid container spacing={3}>
+                {backlogs.length > 0 ? (
+                    backlogs.map((backlog) => (
+                        <Grid item xs={12} sm={6} md={4} key={backlog._id}>
+                            <Card sx={{ borderRadius: 2, boxShadow: 3 }}>
+                                <CardContent>
+                                    <Typography variant="h6" gutterBottom>
+                                        {backlog.name}
+                                    </Typography>
+                                    <Typography variant="body2" color="textSecondary">
+                                        Project: {backlog.project?.projectName || "No Project"}
+                                    </Typography>
+                                    <Divider sx={{ my: 2 }} />
+                                    <Typography variant="subtitle2" gutterBottom>
+                                        Items:
+                                    </Typography>
+                                    {backlog.items.length > 0 ? (
+                                        backlog.items.map((itemId) => {
+                                            const item = backlogItems.find((item) => item._id === itemId);
+                                            return (
+                                                <Chip
+                                                    key={itemId}
+                                                    label={item?.title || "Unknown"}
+                                                    sx={{ mr: 0.5, mb: 0.5 }}
+                                                    color="primary"
+                                                />
+                                            );
+                                        })
+                                    ) : (
+                                        <Typography variant="body2" color="textSecondary">
+                                            No items in this backlog.
                                         </Typography>
-                                        <Typography color="textSecondary" gutterBottom>
-                                            Project: {backlog.project?.projectName || 'N/A'}
-                                        </Typography>
-                                        <TableContainer component={Paper} sx={{ mt: 2 }}>
-                                            <Table>
-                                                <TableHead>
-                                                    <TableRow>
-                                                        <TableCell sx={{ fontWeight: 'bold' }}>#</TableCell>
-                                                        <TableCell sx={{ fontWeight: 'bold' }}>Item Name</TableCell>
-                                                    </TableRow>
-                                                </TableHead>
-                                                <TableBody>
-                                                    {backlog.items.length > 0 ? (
-                                                        backlog.items.map((item, index) => (
-                                                            <TableRow key={index}>
-                                                                <TableCell>{index + 1}</TableCell>
-                                                                <TableCell>{item}</TableCell>
-                                                            </TableRow>
-                                                        ))
-                                                    ) : (
-                                                        <TableRow>
-                                                            <TableCell colSpan={2} align="center">
-                                                                No items available
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    )}
-                                                </TableBody>
-                                            </Table>
-                                        </TableContainer>
-                                    </CardContent>
-                                </Card>
-                            </Grid>
-                        ))}
-                    </Grid>
-                    <Box display="flex" justifyContent="center" mt={3}>
-                        <Pagination
-                            count={Math.ceil(backlogs.length / itemsPerPage)}
-                            page={currentPage}
-                            onChange={(_, page) => setCurrentPage(page)}
-                            sx={{ mt: 2 }}
-                        />
-                    </Box>
-                </>
-            )}
-            <AddBacklog
-                open={openDialog}
-                onClose={() => setOpenDialog(false)}
-                onBacklogCreated={handleBacklogCreated}
-            />
+                                    )}
+                                </CardContent>
+                                <CardActions>
+                                    <Tooltip title="Edit Backlog">
+                                        <IconButton onClick={() => handleEditBacklog(backlog)}>
+                                            <EditIcon />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Delete Backlog">
+                                        <IconButton color="error" onClick={() => handleDeleteBacklog(backlog._id)}>
+                                            <DeleteIcon />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Export as CSV">
+                                        <Button
+                                            variant="outlined"
+                                            startIcon={<SaveAltIcon />}
+                                            onClick={() => exportToCSV(backlog)}
+                                        >
+                                            Export
+                                        </Button>
+                                    </Tooltip>
+                                </CardActions>
+                            </Card>
+                        </Grid>
+                    ))
+                ) : (
+                    <Typography variant="body2" color="textSecondary">
+                        No backlogs found.
+                    </Typography>
+                )}
+            </Grid>
+
+            {/* Add Backlog Dialog */}
+            <Dialog open={addDialogOpen} onClose={handleAddBacklogClose} maxWidth="sm" fullWidth>
+                <AddBacklog open={addDialogOpen} onClose={handleAddBacklogClose} onBacklogCreated={handleBacklogCreated} />
+            </Dialog>
+
+            {/* Edit Backlog Dialog */}
+            <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)}>
+                <DialogTitle>Edit Backlog</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        label="Backlog Name"
+                        value={editedBacklogName}
+                        onChange={(e) => setEditedBacklogName(e.target.value)}
+                        fullWidth
+                        margin="normal"
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+                    <Button variant="contained" onClick={handleEditSave} color="primary">
+                        Save
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

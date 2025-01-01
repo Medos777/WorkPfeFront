@@ -16,6 +16,7 @@ const IssueList = lazy(() => import('./Issue/IssueList'));
 const SprintList = lazy(() => import('./Sprint/SprintList'));
 const ListBacklog = lazy(() => import('./Backlog/ListBacklog'));
 const AddBacklog = lazy(() => import('./Backlog/AddBacklog'));
+const ListBacklogItems = lazy(() => import('./BacklogItems/ListBacklogItems'));
 const BacklogItems = lazy(() => import('./BacklogItems/BacklogItems'));
 
 const theme = createTheme({
@@ -73,6 +74,13 @@ function App() {
                                 element={
                                     <AuthGuard isLoggedIn={isLoggedIn}>
                                         <AddBacklog/>
+                                    </AuthGuard>
+                                }
+                            /><Route
+                                path="/backlogItemsTest"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <ListBacklogItems/>
                                     </AuthGuard>
                                 }
                             /><Route

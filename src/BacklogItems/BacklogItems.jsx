@@ -53,44 +53,25 @@ const BacklogItems = () => {
         try {
             setLoading(true);
 
-            // Parallel fetching with Promise.all
             const [itemsResponse, sprintsResponse, projectsResponse, usersResponse] = await Promise.all([
-                backlogItemService.getAll().catch((err) => {
-                    console.error('Error fetching backlog items:', err.response?.data || err.message);
-                    return { data: [] }; // Fallback to an empty array
-                }),
-                sprintService.getAll().catch((err) => {
-                    console.error('Error fetching sprints:', err.response?.data || err.message);
-                    return { data: [] }; // Fallback to an empty array
-                }),
-                projectService.getAll().catch((err) => {
-                    console.error('Error fetching projects:', err.response?.data || err.message);
-                    return { data: [] }; // Fallback to an empty array
-                }),
-                userService.getAll().catch((err) => {
-                    console.error('Error fetching users:', err.response?.data || err.message);
-                    return { data: [] }; // Fallback to an empty array
-                }),
+                backlogItemService.getAll(),
+                sprintService.getAll(),
+                projectService.getAll(),
+                userService.getAll(),
             ]);
 
-            // Update states with safe data
             setBacklogItems(itemsResponse.data || []);
             setSprints(sprintsResponse.data || []);
             setProjects(projectsResponse.data || []);
             setUsers(usersResponse.data || []);
-            setError(null); // Clear previous errors if all requests succeed
-
         } catch (err) {
-            // General error handling for unexpected cases
-            setError('Unexpected error fetching data. Please try again later.');
-            console.error('General fetch error:', err);
+            setError('Error fetching data. Please try again.');
         } finally {
-            setLoading(false); // Always stop loading
+            setLoading(false);
         }
     };
 
     const handleOpenDialog = () => setOpenDialog(true);
-
     const handleCloseDialog = () => setOpenDialog(false);
 
     const handleInputChange = (e) => {
@@ -103,9 +84,9 @@ const BacklogItems = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
         try {
             await backlogItemService.create(formValues);
+            fetchInitialData();
             setFormValues({
                 title: '',
                 description: '',
@@ -116,11 +97,22 @@ const BacklogItems = () => {
                 project: '',
                 assignedTo: '',
             });
-            fetchInitialData();
             setOpenDialog(false);
         } catch (err) {
-            setError('Error creating backlog item. Please check your inputs.');
-            console.error(err.response?.data || err.message);
+            setError('Error creating backlog item.');
+        }
+    };
+
+    const getStatusIcon = (status) => {
+        switch (status) {
+            case 'done':
+                return <CheckCircle color="success" />;
+            case 'in-progress':
+                return <HourglassEmpty color="warning" />;
+            case 'todo':
+                return <Error color="error" />;
+            default:
+                return null;
         }
     };
 
@@ -131,17 +123,6 @@ const BacklogItems = () => {
             </Box>
         );
     }
-
-    const getStatusIcon = (status) => {
-        switch (status) {
-            case 'done':
-                return <CheckCircle color="success" />;
-            case 'in-progress':
-                return <HourglassEmpty color="warning" />;
-            default:
-                return <Error color="error" />;
-        }
-    };
 
     return (
         <Box sx={{ p: 3 }}>
@@ -155,23 +136,39 @@ const BacklogItems = () => {
                 </Button>
             </Box>
             <Grid container spacing={3}>
-                {backlogItems?.length > 0 ? (
+                {backlogItems.length > 0 ? (
                     backlogItems.map((item) => (
                         <Grid item xs={12} sm={6} md={4} key={item._id}>
-                            <Card sx={{ height: '100%' }}>
+                            <Card>
                                 <CardContent>
                                     <Typography variant="h6" gutterBottom>
                                         {item.title}
                                     </Typography>
-                                    <Typography variant="body2" color="textSecondary" paragraph>
+                                    <Typography variant="body2" color="textSecondary">
                                         {item.description || 'No description provided'}
                                     </Typography>
                                     <Chip label={`Type: ${item.type}`} sx={{ mr: 1 }} />
-                                    <Chip label={`Status: ${item.status}`} icon={getStatusIcon(item.status)} sx={{ mr: 1 }} />
+                                    <Chip
+                                        label={`Status: ${item.status}`}
+                                        icon={getStatusIcon(item.status)}
+                                        sx={{ mr: 1 }}
+                                    />
                                     <Typography variant="body2">Effort: {item.effortEstimate}</Typography>
-                                    {item.sprint && <Typography variant="body2">Sprint: {item.sprint.name}</Typography>}
-                                    {item.project && <Typography variant="body2">Project: {item.project.projectName}</Typography>}
-                                    {item.assignedTo && <Typography variant="body2">Assigned To: {item.assignedTo.username}</Typography>}
+                                    {item.sprint && (
+                                        <Typography variant="body2">
+                                            Sprint: {sprints.find((sprint) => sprint._id === item.sprint)?.name || 'Unknown'}
+                                        </Typography>
+                                    )}
+                                    {item.project && (
+                                        <Typography variant="body2">
+                                            Project: {projects.find((project) => project._id === item.project)?.projectName || 'Unknown'}
+                                        </Typography>
+                                    )}
+                                    {item.assignedTo && (
+                                        <Typography variant="body2">
+                                            Assigned To: {users.find((user) => user._id === item.assignedTo)?.username || 'Unknown'}
+                                        </Typography>
+                                    )}
                                 </CardContent>
                                 <CardActions>
                                     <Button size="small" color="primary">
@@ -185,13 +182,11 @@ const BacklogItems = () => {
                         </Grid>
                     ))
                 ) : (
-                    <Typography variant="body2" color="textSecondary">
-                        No backlog items found.
-                    </Typography>
+                    <Typography>No backlog items found.</Typography>
                 )}
             </Grid>
 
-            {/* Dialog for Adding Backlog Items */}
+            {/* Add Backlog Item Dialog */}
             <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
                 <DialogTitle>Add Backlog Item</DialogTitle>
                 <DialogContent>

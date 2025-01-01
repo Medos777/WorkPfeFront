@@ -4,7 +4,7 @@ const getAll = () => {
     return httpClient.get('/Backlogs');
 };
 
-const getIssues = (BacklogsId) => {
+const get = (BacklogsId) => {
     return httpClient.get(`/Backlogs/id/${BacklogsId}`);
 };
 
@@ -16,8 +16,8 @@ const update = (BacklogsId, BacklogsData) => {
     return httpClient.put(`/Backlogs/${BacklogsId}`, BacklogsData);
 };
 
-const deleteIssues = (BacklogsId) => {
+const deleteacklog = (BacklogsId) => {
     return httpClient.delete(`/Backlogs/${BacklogsId}`);
 };
 
-export default { getAll, create, deleteIssues, getIssues, update };
+export default { getAll, create, deleteacklog, get, update };
