@@ -11,6 +11,11 @@ import {
     Badge,
     Typography,
     Tooltip,
+    List,
+    ListItem,
+    ListItemText,
+    ListItemIcon,
+    Popover,
 } from '@mui/material';
 import {
     Home,
@@ -21,34 +26,64 @@ import {
     Notifications,
     Brightness4,
     Brightness7,
+    Add,
+    Edit,
+    Delete,
 } from '@mui/icons-material';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import {logout} from "../login/Login"; // Import socket.io-client
+import {logout} from "../login/Login";
+import { format } from 'date-fns';
 
 const Menu = ({ darkMode, toggleDarkMode }) => {
+    const navigate = useNavigate();
     const [anchorEl, setAnchorEl] = useState(null);
-    const [notificationCount, setNotificationCount] = useState(0); // State for notification badge
-    const [notifications, setNotifications] = useState([]); // To store received notifications
-    const socket = React.useRef(null); // Socket reference
+    const [notificationAnchorEl, setNotificationAnchorEl] = useState(null);
+    const [notifications, setNotifications] = useState([]);
+    const socket = React.useRef(null);
 
     useEffect(() => {
-        // Initialize socket connection
-        socket.current = io('http://localhost:3001'); // Replace with your backend URL
+        socket.current = io('http://localhost:3001');
         console.log('Connecting to WebSocket...');
 
-        // Listen for notifications
-        socket.current.on('receiveNotification', (notification) => {
-            console.log('Notification received:', notification);
-            setNotifications((prev) => [...prev, notification]);
-            setNotificationCount((prevCount) => prevCount + 1);
+        socket.current.on('projectAdded', (notification) => {
+            handleNewNotification({
+                type: 'add',
+                message: `New project "${notification.projectName}" has been created`,
+                timestamp: new Date(),
+                icon: <Add color="success" />,
+                projectId: notification.projectId
+            });
         });
 
-        // Cleanup on unmount
+        socket.current.on('projectUpdated', (notification) => {
+            handleNewNotification({
+                type: 'update',
+                message: `Project "${notification.projectName}" has been updated`,
+                timestamp: new Date(),
+                icon: <Edit color="primary" />,
+                projectId: notification.projectId
+            });
+        });
+
+        socket.current.on('projectDeleted', (notification) => {
+            handleNewNotification({
+                type: 'delete',
+                message: `Project "${notification.projectName}" has been deleted`,
+                timestamp: new Date(),
+                icon: <Delete color="error" />,
+                projectId: notification.projectId
+            });
+        });
+
         return () => {
             socket.current.disconnect();
         };
     }, []);
+
+    const handleNewNotification = (notification) => {
+        setNotifications(prev => [notification, ...prev].slice(0, 10));
+    };
 
     const handleMenuOpen = (event) => {
         setAnchorEl(event.currentTarget);
@@ -56,9 +91,22 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
 
     const handleMenuClose = () => {
         setAnchorEl(null);
-
     };
 
+    const handleNotificationClick = (event) => {
+        setNotificationAnchorEl(event.currentTarget);
+    };
+
+    const handleNotificationClose = () => {
+        setNotificationAnchorEl(null);
+    };
+
+    const handleNotificationItemClick = (notification) => {
+        if (notification.projectId && notification.type !== 'delete') {
+            navigate(`/projects/${notification.projectId}`);
+        }
+        handleNotificationClose();
+    };
 
     const menuItems = [
         { label: 'Home', path: '/', icon: <Home /> },
@@ -68,12 +116,12 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
         { label: 'Issues', path: '/issues', icon: <BugReport /> },
         { label: 'Backlog', path: '/backlog', icon: <BugReport /> },
     ];
+
     const handleLogout = () => {
         logout();
-//        window.location.reload()
-        // localStorage.clear()
         socket.current.disconnect();
     };
+
     return (
         <AppBar position="static">
             <Toolbar>
@@ -98,23 +146,75 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
                     ))}
                 </Box>
 
-                {/* Notification Badge */}
                 <Tooltip title="Notifications">
-                    <IconButton color="inherit" onClick={() => setNotificationCount(0)}>
-                        <Badge badgeContent={notificationCount} color="error">
+                    <IconButton color="inherit" onClick={handleNotificationClick}>
+                        <Badge badgeContent={notifications.length} color="error">
                             <Notifications />
                         </Badge>
                     </IconButton>
                 </Tooltip>
 
-                {/* Dark Mode Toggle */}
+                <Popover
+                    open={Boolean(notificationAnchorEl)}
+                    anchorEl={notificationAnchorEl}
+                    onClose={handleNotificationClose}
+                    anchorOrigin={{
+                        vertical: 'bottom',
+                        horizontal: 'right',
+                    }}
+                    transformOrigin={{
+                        vertical: 'top',
+                        horizontal: 'right',
+                    }}
+                    PaperProps={{
+                        sx: { 
+                            width: '350px',
+                            maxHeight: '400px',
+                            overflow: 'auto'
+                        }
+                    }}
+                >
+                    <Typography variant="h6" sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                        Notifications
+                    </Typography>
+                    {notifications.length === 0 ? (
+                        <Box sx={{ p: 2, textAlign: 'center' }}>
+                            <Typography color="text.secondary">No notifications</Typography>
+                        </Box>
+                    ) : (
+                        <List>
+                            {notifications.map((notification, index) => (
+                                <ListItem 
+                                    key={index}
+                                    button
+                                    onClick={() => handleNotificationItemClick(notification)}
+                                    sx={{
+                                        borderBottom: 1,
+                                        borderColor: 'divider',
+                                        '&:hover': {
+                                            backgroundColor: 'action.hover',
+                                        },
+                                    }}
+                                >
+                                    <ListItemIcon>
+                                        {notification.icon}
+                                    </ListItemIcon>
+                                    <ListItemText 
+                                        primary={notification.message}
+                                        secondary={format(notification.timestamp, 'MMM dd, yyyy HH:mm')}
+                                    />
+                                </ListItem>
+                            ))}
+                        </List>
+                    )}
+                </Popover>
+
                 <Tooltip title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
                     <IconButton color="inherit" onClick={toggleDarkMode}>
                         {darkMode ? <Brightness7 /> : <Brightness4 />}
                     </IconButton>
                 </Tooltip>
 
-                {/* Profile Menu */}
                 <Tooltip title="Account Settings">
                     <IconButton onClick={handleMenuOpen}>
                         <Avatar alt="User Avatar" src="/path-to-avatar.jpg" />

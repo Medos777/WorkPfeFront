@@ -1,5 +1,5 @@
 # Step 1: Build the React app using a Node.js container
-FROM node:18-alpine AS build
+FROM node:18.16.0-alpine AS build
 
 # Set the working directory inside the container
 WORKDIR /app

@@ -1,44 +1,158 @@
 import React, { useState, useEffect } from 'react';
 import {
     Box,
-    Card,
-    CardContent,
     Typography,
     Button,
     TextField,
     Select,
     MenuItem,
     CircularProgress,
-    Switch,
-    LinearProgress,
-    Pagination,
-    Alert,
-    Modal,
+    Chip,
+    IconButton,
+    Paper,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
     Tooltip,
+    InputAdornment,
+    Stack,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Grid,
+    Divider,
+    Alert,
 } from '@mui/material';
-import { Add, Delete } from '@mui/icons-material';
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import {
+    Add,
+    Search,
+    Star,
+    StarBorder,
+    MoreVert,
+    ArrowUpward,
+    ArrowDownward,
+    CalendarToday,
+    Group,
+    Description,
+    Flag,
+    Edit,
+    Delete,
+} from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { createTheme, ThemeProvider } from '@mui/material/styles';
-import { saveAs } from 'file-saver';
 import projectService from '../service/ProjectService';
 
-const ITEMS_PER_PAGE = 6;
+const ITEMS_PER_PAGE = 10;
 const STATUS_OPTIONS = ['All Statuses', 'Upcoming', 'Ongoing', 'Completed'];
-const SORT_OPTIONS = [
-    { value: '', label: 'Default' },
-    { value: 'startDateAsc', label: 'Start Date (Asc)' },
-    { value: 'startDateDesc', label: 'Start Date (Desc)' },
-    { value: 'progressAsc', label: 'Progress (Asc)' },
-    { value: 'progressDesc', label: 'Progress (Desc)' },
-];
 
-const ProjectCard = ({ project, provided, isDragging, onClick }) => {
-    const getProgress = () => {
-        const start = new Date(project.startDate).getTime();
-        const end = new Date(project.endDate).getTime();
-        const today = Date.now();
-        return Math.min(100, Math.max(0, ((today - start) / (end - start)) * 100));
+const getStatusColor = (status) => {
+    switch (status) {
+        case 'Upcoming':
+            return '#0052CC';
+        case 'Ongoing':
+            return '#00875A';
+        case 'Completed':
+            return '#6B778C';
+        default:
+            return '#6B778C';
+    }
+};
+
+const ProjectRow = ({ project, onFavorite, onProjectClick }) => {
+    const formatDate = (date) => {
+        return new Date(date).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+        });
+    };
+
+    return (
+        <TableRow
+            hover
+            onClick={() => onProjectClick(project)}
+            sx={{ cursor: 'pointer', '&:hover': { backgroundColor: '#F4F5F7' } }}
+        >
+            <TableCell padding="checkbox">
+                <IconButton
+                    size="small"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onFavorite(project._id);
+                    }}
+                >
+                    {project.favorite ? (
+                        <Star sx={{ color: '#F4C145' }} />
+                    ) : (
+                        <StarBorder sx={{ color: '#6B778C' }} />
+                    )}
+                </IconButton>
+            </TableCell>
+            <TableCell>
+                <Stack direction="row" spacing={2} alignItems="center">
+                    <Box
+                        sx={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 1,
+                            backgroundColor: '#DFE1E6',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        {(project.projectName || '').charAt(0).toUpperCase()}
+                    </Box>
+                    <Box>
+                        <Typography variant="subtitle1" sx={{ color: '#172B4D' }}>
+                            {project.projectName}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#6B778C' }}>
+                            {project.key || project._id}
+                        </Typography>
+                    </Box>
+                </Stack>
+            </TableCell>
+            <TableCell>
+                <Chip
+                    label={project.status}
+                    size="small"
+                    sx={{
+                        backgroundColor: `${getStatusColor(project.status)}15`,
+                        color: getStatusColor(project.status),
+                        fontWeight: 600,
+                    }}
+                />
+            </TableCell>
+            <TableCell>
+                <Typography variant="body2" sx={{ color: '#6B778C' }}>
+                    {formatDate(project.startDate)}
+                </Typography>
+            </TableCell>
+            <TableCell>
+                <Typography variant="body2" sx={{ color: '#6B778C' }}>
+                    {formatDate(project.endDate)}
+                </Typography>
+            </TableCell>
+            <TableCell align="right">
+                <IconButton size="small">
+                    <MoreVert sx={{ color: '#6B778C' }} />
+                </IconButton>
+            </TableCell>
+        </TableRow>
+    );
+};
+
+const ProjectDetailsDialog = ({ project, open, onClose, onViewProject, onEdit, onDelete }) => {
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+    const handleDelete = () => {
+        setDeleteConfirmOpen(false);
+        onDelete(project._id);
+        onClose();
     };
 
     const formatDate = (date) => {
@@ -49,58 +163,208 @@ const ProjectCard = ({ project, provided, isDragging, onClick }) => {
         });
     };
 
+    if (!project) return null;
+
     return (
-        <Card
-            ref={provided.innerRef}
-            {...provided.draggableProps}
-            {...provided.dragHandleProps}
-            sx={{
-                margin: 1,
-                transition: 'all 0.3s ease',
-                transform: isDragging ? 'rotate(3deg) scale(1.02)' : 'none',
-                '&:hover': { boxShadow: 6 },
-            }}
-            onClick={onClick}
-        >
-            <CardContent>
-                <Typography variant="h6" gutterBottom>
-                    {project.projectName}
-                </Typography>
-                <Typography color="text.secondary">
-                    Start: {formatDate(project.startDate)}
-                </Typography>
-                <Typography color="text.secondary">
-                    End: {formatDate(project.endDate)}
-                </Typography>
-                <LinearProgress
-                    variant="determinate"
-                    value={getProgress()}
-                    sx={{ mt: 2 }}
-                />
-            </CardContent>
-        </Card>
+        <>
+            <Dialog 
+                open={open} 
+                onClose={onClose}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        borderRadius: 2,
+                    }
+                }}
+            >
+                <DialogTitle>
+                    <Stack 
+                        direction="row" 
+                        spacing={2} 
+                        alignItems="center"
+                        justifyContent="space-between"
+                    >
+                        <Stack direction="row" spacing={2} alignItems="center">
+                            <Box
+                                sx={{
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: 1,
+                                    backgroundColor: '#DFE1E6',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '1.2rem',
+                                }}
+                            >
+                                {(project.projectName || '').charAt(0).toUpperCase()}
+                            </Box>
+                            <Box>
+                                <Typography variant="h6" sx={{ color: '#172B4D' }}>
+                                    {project.projectName}
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: '#6B778C' }}>
+                                    Project Key: {project.key || project._id}
+                                </Typography>
+                            </Box>
+                        </Stack>
+                        <Box>
+                            <Tooltip title="Edit Project">
+                                <IconButton
+                                    onClick={() => {
+                                        onClose();
+                                        onEdit(project._id);
+                                    }}
+                                    sx={{ color: '#6B778C' }}
+                                >
+                                    <Edit />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete Project">
+                                <IconButton
+                                    onClick={() => setDeleteConfirmOpen(true)}
+                                    sx={{ color: '#6B778C' }}
+                                >
+                                    <Delete />
+                                </IconButton>
+                            </Tooltip>
+                        </Box>
+                    </Stack>
+                </DialogTitle>
+                <Divider />
+                <DialogContent>
+                    <Grid container spacing={3}>
+                        <Grid item xs={12}>
+                            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                                <Description sx={{ color: '#6B778C' }} />
+                                <Typography variant="subtitle1" sx={{ color: '#172B4D' }}>
+                                    Description
+                                </Typography>
+                            </Stack>
+                            <Typography variant="body2" sx={{ color: '#172B4D', ml: 4 }}>
+                                {project.description || 'No description provided'}
+                            </Typography>
+                        </Grid>
+
+                        <Grid item xs={12}>
+                            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                                <Flag sx={{ color: '#6B778C' }} />
+                                <Typography variant="subtitle1" sx={{ color: '#172B4D' }}>
+                                    Status
+                                </Typography>
+                            </Stack>
+                            <Box sx={{ ml: 4 }}>
+                                <Chip
+                                    label={project.status}
+                                    size="small"
+                                    sx={{
+                                        backgroundColor: `${getStatusColor(project.status)}15`,
+                                        color: getStatusColor(project.status),
+                                        fontWeight: 600,
+                                    }}
+                                />
+                            </Box>
+                        </Grid>
+
+                        <Grid item xs={12} md={6}>
+                            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                                <CalendarToday sx={{ color: '#6B778C' }} />
+                                <Typography variant="subtitle1" sx={{ color: '#172B4D' }}>
+                                    Timeline
+                                </Typography>
+                            </Stack>
+                            <Box sx={{ ml: 4 }}>
+                                <Typography variant="body2" sx={{ color: '#172B4D' }}>
+                                    Start Date: {formatDate(project.startDate)}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: '#172B4D' }}>
+                                    End Date: {formatDate(project.endDate)}
+                                </Typography>
+                            </Box>
+                        </Grid>
+
+                        <Grid item xs={12} md={6}>
+                            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                                <Group sx={{ color: '#6B778C' }} />
+                                <Typography variant="subtitle1" sx={{ color: '#172B4D' }}>
+                                    Team
+                                </Typography>
+                            </Stack>
+                            <Box sx={{ ml: 4 }}>
+                                <Typography variant="body2" sx={{ color: '#172B4D' }}>
+                                    Team Members: {project.teamMembers?.length || 0}
+                                </Typography>
+                                {project.teamMembers?.map((member, index) => (
+                                    <Typography key={index} variant="body2" sx={{ color: '#6B778C' }}>
+                                        • {member.name || member}
+                                    </Typography>
+                                ))}
+                            </Box>
+                        </Grid>
+                    </Grid>
+                </DialogContent>
+                <DialogActions sx={{ p: 2 }}>
+                    <Button onClick={onClose} sx={{ color: '#6B778C' }}>
+                        Close
+                    </Button>
+                    <Button
+                        variant="contained"
+                        onClick={() => {
+                            onClose();
+                            onViewProject(project._id);
+                        }}
+                        sx={{
+                            backgroundColor: '#0052CC',
+                            '&:hover': { backgroundColor: '#0747A6' },
+                        }}
+                    >
+                        View Project
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog
+                open={deleteConfirmOpen}
+                onClose={() => setDeleteConfirmOpen(false)}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>Delete Project</DialogTitle>
+                <DialogContent>
+                    <Typography>
+                        Are you sure you want to delete project "{project.projectName}"? This action cannot be undone.
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteConfirmOpen(false)}>
+                        Cancel
+                    </Button>
+                    <Button 
+                        onClick={handleDelete}
+                        color="error"
+                        variant="contained"
+                    >
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </>
     );
 };
 
 const ListProject = () => {
+    const navigate = useNavigate();
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All Statuses');
-    const [sortOption, setSortOption] = useState('');
-    const [darkMode, setDarkMode] = useState(false);
+    const [sortField, setSortField] = useState('');
+    const [sortDirection, setSortDirection] = useState('asc');
+    const [error, setError] = useState('');
     const [selectedProject, setSelectedProject] = useState(null);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [openModal, setOpenModal] = useState(false);
-
-    const navigate = useNavigate();
-
-    const theme = createTheme({
-        palette: {
-            mode: darkMode ? 'dark' : 'light',
-        },
-    });
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [successMessage, setSuccessMessage] = useState('');
 
     useEffect(() => {
         loadProjects();
@@ -110,256 +374,242 @@ const ListProject = () => {
         try {
             setLoading(true);
             const response = await projectService.getAll();
-            setProjects(response.data || []);
-            setError(null);
+            setProjects(response.data);
+            setError('');
         } catch (err) {
-            setError(err.message || 'Failed to load projects');
+            setError('Failed to load projects. Please try again later.');
+            console.error('Error loading projects:', err);
         } finally {
             setLoading(false);
         }
     };
 
-    const getProgress = (project) => {
-        const start = new Date(project.startDate).getTime();
-        const end = new Date(project.endDate).getTime();
-        const today = Date.now();
-        return Math.min(100, Math.max(0, ((today - start) / (end - start)) * 100));
+    const handleFavorite = async (projectId) => {
+        const updatedProjects = projects.map((p) =>
+            p._id === projectId ? { ...p, favorite: !p.favorite } : p
+        );
+        setProjects(updatedProjects);
+        // TODO: Implement backend favorite functionality
     };
 
-    const handleDragEnd = async (result) => {
-        if (!result.destination) return;
+    const handleSort = (field) => {
+        if (sortField === field) {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortField(field);
+            setSortDirection('asc');
+        }
+    };
 
-        const items = Array.from(projects);
-        const [reorderedItem] = items.splice(result.source.index, 1);
-        items.splice(result.destination.index, 0, reorderedItem);
+    const filteredProjects = projects
+        .filter((project) => {
+            const matchesSearch = project.projectName
+                ?.toLowerCase()
+                .includes(searchTerm.toLowerCase());
+            const matchesStatus =
+                statusFilter === 'All Statuses' || project.status === statusFilter;
+            return matchesSearch && matchesStatus;
+        })
+        .sort((a, b) => {
+            if (!sortField) return 0;
+            const factor = sortDirection === 'asc' ? 1 : -1;
+            if (sortField === 'name') {
+                return factor * (a.projectName || '').localeCompare(b.projectName || '');
+            }
+            if (sortField === 'startDate') {
+                return (
+                    factor *
+                    (new Date(a.startDate).getTime() -
+                        new Date(b.startDate).getTime())
+                );
+            }
+            if (sortField === 'endDate') {
+                return (
+                    factor *
+                    (new Date(a.endDate).getTime() - new Date(b.endDate).getTime())
+                );
+            }
+            return 0;
+        });
 
-        setProjects(items);
+    const renderSortIcon = (field) => {
+        if (sortField !== field) return null;
+        return sortDirection === 'asc' ? (
+            <ArrowUpward sx={{ fontSize: 16 }} />
+        ) : (
+            <ArrowDownward sx={{ fontSize: 16 }} />
+        );
+    };
 
+    const handleProjectClick = (project) => {
+        setSelectedProject(project);
+        setDialogOpen(true);
+    };
+
+    const handleDelete = async (projectId) => {
         try {
-            console.log('Reordered projects:', items);
+            await projectService.deleteProject(projectId);
+            setProjects(projects.filter(p => p._id !== projectId));
+            setSuccessMessage('Project deleted successfully');
+            setTimeout(() => setSuccessMessage(''), 3000);
         } catch (err) {
-            console.error('Error updating project order:', err);
+            setError('Failed to delete project. Please try again.');
+            console.error('Error deleting project:', err);
         }
     };
-
-    const handleExport = () => {
-        const headers = 'Project Name,Start Date,End Date\n';
-        const csv = headers + projects.map((p) => {
-            const startDate = p.startDate && !isNaN(new Date(p.startDate)) ? new Date(p.startDate).toISOString() : 'N/A';
-            const endDate = p.endDate && !isNaN(new Date(p.endDate)) ? new Date(p.endDate).toISOString() : 'N/A';
-            return `${p.projectName || 'Unnamed Project'},${startDate},${endDate}`;
-        }).join('\n');
-
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        saveAs(blob, 'projects.csv');
-    };
-
-
-    const filteredProjects = projects.filter((project) => {
-        const matchesSearch = project.projectName?.toLowerCase().includes(searchQuery.toLowerCase());
-
-        if (statusFilter === 'All Statuses') return matchesSearch;
-
-        const today = new Date();
-        const startDate = new Date(project.startDate);
-        const endDate = new Date(project.endDate);
-
-        const status =
-            today < startDate ? 'Upcoming' :
-                today > endDate ? 'Completed' : 'Ongoing';
-
-        return matchesSearch && status === statusFilter;
-    });
-
-    const sortedProjects = [...filteredProjects].sort((a, b) => {
-        switch (sortOption) {
-            case 'startDateAsc':
-                return new Date(a.startDate) - new Date(b.startDate);
-            case 'startDateDesc':
-                return new Date(b.startDate) - new Date(a.startDate);
-            case 'progressAsc':
-                return getProgress(a) - getProgress(b);
-            case 'progressDesc':
-                return getProgress(b) - getProgress(a);
-            default:
-                return 0;
-        }
-    });
-
-    const paginatedProjects = sortedProjects.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
-    );
-
-    const renderModal = () => (
-        <Modal
-            open={openModal}
-            onClose={() => setOpenModal(false)}
-        >
-            <Box
-                sx={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    width: 400,
-                    bgcolor: 'background.paper',
-                    boxShadow: 24,
-                    p: 4,
-                    borderRadius: 2,
-                }}
-            >
-                {selectedProject && (
-                    <>
-                        <Typography variant="h6" gutterBottom>
-                            {selectedProject.projectName}
-                        </Typography>
-                        <Typography>
-                            {selectedProject.description || 'No description available.'}
-                        </Typography>
-                        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                            <Button
-                                variant="outlined"
-                                onClick={() => navigate(`/projects/update/${selectedProject._id}`)}
-                            >
-                                Edit
-                            </Button>
-                            <Button
-                                variant="contained"
-                                onClick={() => setOpenModal(false)}
-                            >
-                                Close
-                            </Button>
-                        </Box>
-                    </>
-                )}
-            </Box>
-        </Modal>
-    );
 
     if (loading) {
         return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+            <Box
+                display="flex"
+                justifyContent="center"
+                alignItems="center"
+                minHeight="60vh"
+            >
                 <CircularProgress />
             </Box>
         );
     }
 
     return (
-        <ThemeProvider theme={theme}>
-            <Box sx={{ p: 3 }}>
-                {/* Header */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-                    <Typography variant="h4">Project Management</Typography>
-                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                        <Tooltip title="Export projects as CSV">
-                            <Button onClick={handleExport} variant="outlined">
-                                Export CSV
-                            </Button>
-                        </Tooltip>
-                        <Tooltip title="Toggle light/dark mode">
-                            <Switch
-                                checked={darkMode}
-                                onChange={() => setDarkMode(!darkMode)}
-                            />
-                        </Tooltip>
-                        <Tooltip title="Create a new project">
-                            <Button
-                                startIcon={<Add />}
-                                variant="contained"
-                                onClick={() => navigate('/projects/add')}
-                            >
-                                New Project
-                            </Button>
-                        </Tooltip>
-                    </Box>
-                </Box>
-
-                {/* Filters */}
-                <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-                    <TextField
-                        label="Search Projects"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        sx={{ flexGrow: 1 }}
-                    />
-                    <Select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        sx={{ width: 200 }}
-                    >
-                        {STATUS_OPTIONS.map((status) => (
-                            <MenuItem key={status} value={status}>
-                                {status}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                    <Select
-                        value={sortOption}
-                        onChange={(e) => setSortOption(e.target.value)}
-                        sx={{ width: 200 }}
-                    >
-                        {SORT_OPTIONS.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>
-                                {option.label}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </Box>
-
-                {/* Projects */}
-                <DragDropContext onDragEnd={handleDragEnd}>
-                    <Droppable droppableId="projects">
-                        {(provided) => (
-                            <Box
-                                ref={provided.innerRef}
-                                {...provided.droppableProps}
-                                sx={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                                    gap: 2,
-                                    minHeight: 400,
-                                }}
-                            >
-                                {paginatedProjects.map((project, index) => (
-                                    <Draggable
-                                        key={project._id}
-                                        draggableId={String(project._id)}
-                                        index={index}
-                                    >
-                                        {(provided, snapshot) => (
-                                            <ProjectCard
-                                                project={project}
-                                                provided={provided}
-                                                isDragging={snapshot.isDragging}
-                                                onClick={() => {
-                                                    setSelectedProject(project);
-                                                    setOpenModal(true);
-                                                }}
-                                            />
-                                        )}
-                                    </Draggable>
-                                ))}
-                                {provided.placeholder}
-                            </Box>
-                        )}
-                    </Droppable>
-                </DragDropContext>
-
-                {/* Pagination */}
-                {paginatedProjects.length > 0 && (
-                    <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
-                        <Pagination
-                            count={Math.ceil(sortedProjects.length / ITEMS_PER_PAGE)}
-                            page={currentPage}
-                            onChange={(_, page) => setCurrentPage(page)}
-                        />
-                    </Box>
-                )}
-
-                {renderModal()}
+        <Box sx={{ p: 3, maxWidth: 1200, margin: '0 auto' }}>
+            <Box
+                sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    mb: 3,
+                }}
+            >
+                <Typography variant="h5" sx={{ fontWeight: 600, color: '#172B4D' }}>
+                    Projects
+                </Typography>
+                <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={() => navigate('/projects/add')}
+                    sx={{
+                        backgroundColor: '#0052CC',
+                        '&:hover': { backgroundColor: '#0747A6' },
+                    }}
+                >
+                    Create project
+                </Button>
             </Box>
-        </ThemeProvider>
+
+            {successMessage && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                    {successMessage}
+                </Alert>
+            )}
+
+            <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
+                <TextField
+                    size="small"
+                    placeholder="Search projects..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    sx={{ width: 300 }}
+                    InputProps={{
+                        startAdornment: (
+                            <InputAdornment position="start">
+                                <Search sx={{ color: '#6B778C' }} />
+                            </InputAdornment>
+                        ),
+                    }}
+                />
+                <Select
+                    size="small"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    sx={{ width: 200 }}
+                >
+                    {STATUS_OPTIONS.map((status) => (
+                        <MenuItem key={status} value={status}>
+                            {status}
+                        </MenuItem>
+                    ))}
+                </Select>
+            </Box>
+
+            {error && (
+                <Box sx={{ mb: 2 }}>
+                    <Typography color="error">{error}</Typography>
+                </Box>
+            )}
+
+            <TableContainer component={Paper} sx={{ mb: 3 }}>
+                <Table>
+                    <TableHead>
+                        <TableRow>
+                            <TableCell padding="checkbox" />
+                            <TableCell
+                                onClick={() => handleSort('name')}
+                                sx={{ cursor: 'pointer' }}
+                            >
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    Name {renderSortIcon('name')}
+                                </Box>
+                            </TableCell>
+                            <TableCell>Status</TableCell>
+                            <TableCell
+                                onClick={() => handleSort('startDate')}
+                                sx={{ cursor: 'pointer' }}
+                            >
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    Start Date {renderSortIcon('startDate')}
+                                </Box>
+                            </TableCell>
+                            <TableCell
+                                onClick={() => handleSort('endDate')}
+                                sx={{ cursor: 'pointer' }}
+                            >
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    End Date {renderSortIcon('endDate')}
+                                </Box>
+                            </TableCell>
+                            <TableCell align="right" />
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {filteredProjects.map((project) => (
+                            <ProjectRow
+                                key={project._id}
+                                project={project}
+                                onFavorite={handleFavorite}
+                                onProjectClick={() => handleProjectClick(project)}
+                            />
+                        ))}
+                        {filteredProjects.length === 0 && (
+                            <TableRow>
+                                <TableCell colSpan={6} align="center">
+                                    <Box sx={{ py: 3 }}>
+                                        <Typography
+                                            variant="body1"
+                                            sx={{ color: '#6B778C' }}
+                                        >
+                                            No projects found
+                                        </Typography>
+                                    </Box>
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </TableContainer>
+
+            <ProjectDetailsDialog
+                project={selectedProject}
+                open={dialogOpen}
+                onClose={() => {
+                    setDialogOpen(false);
+                    setSelectedProject(null);
+                }}
+                onViewProject={(id) => navigate(`/projects/${id}`)}
+                onEdit={(id) => navigate(`/projects/update/${id}`)}
+                onDelete={handleDelete}
+            />
+        </Box>
     );
 };
 

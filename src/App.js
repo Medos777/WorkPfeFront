@@ -11,6 +11,7 @@ const Dashboard = lazy(() => import('./Dashboard/Dashboard'));
 const AddProject = lazy(() => import('./Project/AddProject'));
 const UpdateProject = lazy(() => import('./Project/UpdateProject'));
 const ListProject = lazy(() => import('./Project/ListProject'));
+const AiProjectCreation = lazy(() => import('./Project/AiProjectCreation'));
 const TeamComponent = lazy(() => import('./Team/TeamComponent'));
 const IssueList = lazy(() => import('./Issue/IssueList'));
 const SprintList = lazy(() => import('./Sprint/SprintList'));
@@ -18,6 +19,9 @@ const ListBacklog = lazy(() => import('./Backlog/ListBacklog'));
 const AddBacklog = lazy(() => import('./Backlog/AddBacklog'));
 const ListBacklogItems = lazy(() => import('./BacklogItems/ListBacklogItems'));
 const BacklogItems = lazy(() => import('./BacklogItems/BacklogItems'));
+const AddTemplate = lazy(() => import('./Template/AddTemplate'));
+const EditTemplate = lazy(() => import('./Template/EditTemplate'));
+const ListTemplate = lazy(() => import('./Template/ListTemplate'));
 
 const theme = createTheme({
     palette: {
@@ -100,6 +104,14 @@ function App() {
                                 }
                             />
                             <Route
+                                path="/projects/ai-create"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <AiProjectCreation />
+                                    </AuthGuard>
+                                }
+                            />
+                            <Route
                                 path="/projects/update/:projectId"
                                 element={
                                     <AuthGuard isLoggedIn={isLoggedIn}>
@@ -136,6 +148,30 @@ function App() {
                                 element={
                                     <AuthGuard isLoggedIn={isLoggedIn}>
                                         <SprintList />
+                                    </AuthGuard>
+                                }
+                            />
+                            <Route
+                                path="/templates"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <ListTemplate />
+                                    </AuthGuard>
+                                }
+                            />
+                            <Route
+                                path="/templates/add"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <AddTemplate />
+                                    </AuthGuard>
+                                }
+                            />
+                            <Route
+                                path="/templates/edit/:id"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <EditTemplate />
                                     </AuthGuard>
                                 }
                             />

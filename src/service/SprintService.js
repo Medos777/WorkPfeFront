@@ -19,5 +19,7 @@ const update = (sprintId, sprintData) => {
 const deleteSprint = (sprintId) => {
     return httpClient.delete(`/sprints/${sprintId}`);
 };
-
-export default { getAll, create, deleteSprint, getSprint, update };
+const updateBacklogItems = (sprintId, backlogItemId) => {
+    console.log('Sending backlogItemId:', backlogItemId);
+    return httpClient.put(`/sprints/${sprintId}/backlogItems`, { backlogItemId });};
+export default { getAll, create, deleteSprint, getSprint, update,updateBacklogItems };

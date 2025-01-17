@@ -1,4 +1,4 @@
- import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
     Box,
     Typography,
@@ -13,21 +13,22 @@ import {
     IconButton,
     Divider,
     Chip,
-    TextField,
     Dialog,
-    DialogActions,
-    DialogContent,
     DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField,
 } from "@mui/material";
 import {
     SaveAlt as SaveAltIcon,
     Delete as DeleteIcon,
-    Edit as EditIcon, Add as AddIcon,
+    Edit as EditIcon,
+    Add as AddIcon,
 } from "@mui/icons-material";
 import backlogService from "../service/BacklogService";
 import backlogItemService from "../service/BacklogItemService";
 import { saveAs } from "file-saver";
- import AddBacklog from "./AddBacklog";
+import AddBacklog from "./AddBacklog"; // Import AddBacklog
 
 const ListBacklog = () => {
     const [backlogs, setBacklogs] = useState([]);
@@ -35,9 +36,9 @@ const ListBacklog = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [addDialogOpen, setAddDialogOpen] = useState(false);
     const [selectedBacklog, setSelectedBacklog] = useState(null);
     const [editedBacklogName, setEditedBacklogName] = useState("");
-    const [addDialogOpen, setAddDialogOpen] = useState(false);
 
     useEffect(() => {
         fetchBacklogs();
@@ -65,7 +66,7 @@ const ListBacklog = () => {
             .map((itemId) => {
                 const item = backlogItems.find((item) => item._id === itemId);
                 if (!item) return null;
-                return `${backlog.name},${backlog.project.projectName},${item.title},${item.description},${item.type},${item.status}`;
+                return `${backlog.name},${backlog.project?.projectName || "No Project"},${item.title},${item.description},${item.type},${item.status}`;
             })
             .filter(Boolean)
             .join("\n");
@@ -73,12 +74,6 @@ const ListBacklog = () => {
         const csv = headers + items;
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         saveAs(blob, `${backlog.name.replace(/\s+/g, "_")}_backlog.csv`);
-    };
-
-    const getItemNames = (itemIds) => {
-        return itemIds
-            .map((id) => backlogItems.find((item) => item._id === id)?.title || "Unknown")
-            .join(", ");
     };
 
     const handleEditBacklog = (backlog) => {
@@ -106,21 +101,6 @@ const ListBacklog = () => {
         }
     };
 
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
-                <CircularProgress />
-            </Box>
-        );
-    }
-
-    if (error) {
-        return (
-            <Box p={3}>
-                <Alert severity="error">{error}</Alert>
-            </Box>
-        );
-    }
     const handleAddBacklogOpen = () => setAddDialogOpen(true);
 
     const handleAddBacklogClose = () => setAddDialogOpen(false);
@@ -223,9 +203,12 @@ const ListBacklog = () => {
                 )}
             </Grid>
 
+            {/* Add Backlog Dialog */}
             <Dialog open={addDialogOpen} onClose={handleAddBacklogClose} maxWidth="sm" fullWidth>
                 <AddBacklog open={addDialogOpen} onClose={handleAddBacklogClose} onBacklogCreated={handleBacklogCreated} />
             </Dialog>
+
+            {/* Edit Backlog Dialog */}
             <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)}>
                 <DialogTitle>Edit Backlog</DialogTitle>
                 <DialogContent>

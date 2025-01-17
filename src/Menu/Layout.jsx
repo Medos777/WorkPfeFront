@@ -32,7 +32,6 @@ const Layout = ({ children, isLoggedIn }) => {
         <ThemeProvider theme={theme}>
             <CssBaseline />
             <Box>
-                {/* Render Menu only if the user is logged in */}
                 {isLoggedIn && <Menu darkMode={darkMode} toggleDarkMode={toggleDarkMode} />}
                 <Box component="main" sx={{ p: 3, transition: 'background-color 0.3s ease' }}>
                     {children}
