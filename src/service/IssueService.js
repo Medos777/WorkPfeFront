@@ -4,8 +4,20 @@ const getAll = () => {
     return httpClient.get('/issues');
 };
 
-const getIssues = (issueId) => {
-    return httpClient.get(`/issues/id/${issueId}`);
+const getById = (issueId) => {
+    return httpClient.get(`/issues/${issueId}`);
+};
+
+const getByProject = (projectId) => {
+    return httpClient.get(`/issues/project/${projectId}`);
+};
+
+const getByEpic = (epicId) => {
+    return httpClient.get(`/issues/epic/${epicId}`);
+};
+
+const getBySprint = (sprintId) => {
+    return httpClient.get(`/issues/sprint/${sprintId}`);
 };
 
 const create = (issueData) => {
@@ -16,8 +28,38 @@ const update = (issueId, issueData) => {
     return httpClient.put(`/issues/${issueId}`, issueData);
 };
 
-const deleteIssues = (issueId) => {
+const remove = (issueId) => {
     return httpClient.delete(`/issues/${issueId}`);
 };
 
-export default { getAll, create, deleteIssues, getIssues, update };
+const addComment = (issueId, commentData) => {
+    return httpClient.post(`/issues/${issueId}/comments`, commentData);
+};
+
+const addAttachment = (issueId, file) => {
+    const formData = new FormData();
+    formData.append('attachment', file);
+    return httpClient.post(`/issues/${issueId}/attachments`, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data'
+        }
+    });
+};
+
+const updateTimeTracking = (issueId, timeData) => {
+    return httpClient.post(`/issues/${issueId}/timetracking`, timeData);
+};
+
+export default {
+    getAll,
+    getById,
+    getByProject,
+    getByEpic,
+    getBySprint,
+    create,
+    update,
+    remove,
+    addComment,
+    addAttachment,
+    updateTimeTracking
+};

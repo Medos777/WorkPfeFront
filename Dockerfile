@@ -1,5 +1,5 @@
 # Step 1: Build the React app using a Node.js container
-FROM node:18.16.0-alpine AS build
+FROM node:18-alpine AS build
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -13,6 +13,10 @@ RUN npm install
 # Copy the rest of the application code to the working directory
 COPY . .
 
+# Set environment variables
+ENV REACT_APP_API_URL=http://localhost:3001
+ENV REACT_APP_SOCKET_URL=http://localhost:3001
+
 # Build the React app
 RUN npm run build
 
@@ -20,6 +24,7 @@ RUN npm run build
 FROM nginx:alpine
 
 # Copy the built files from the previous stage to the Nginx html directory
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/build /usr/share/nginx/html
 
 # Expose port 80 to allow access to the application

@@ -16,6 +16,7 @@ import {
     ListItemText,
     ListItemIcon,
     Popover,
+    Divider,
 } from '@mui/material';
 import {
     Home,
@@ -29,6 +30,11 @@ import {
     Add,
     Edit,
     Delete,
+    AutoStories,
+    Analytics,
+    Chat,
+    Assessment,
+    CloudDownload,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
@@ -41,6 +47,7 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
     const [notificationAnchorEl, setNotificationAnchorEl] = useState(null);
     const [notifications, setNotifications] = useState([]);
     const socket = React.useRef(null);
+    const [analyticsMenuAnchor, setAnalyticsMenuAnchor] = useState(null);
 
     useEffect(() => {
         socket.current = io('http://localhost:3001');
@@ -108,6 +115,14 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
         handleNotificationClose();
     };
 
+    const handleAnalyticsClick = (event) => {
+        setAnalyticsMenuAnchor(event.currentTarget);
+    };
+
+    const handleAnalyticsClose = () => {
+        setAnalyticsMenuAnchor(null);
+    };
+
     const menuItems = [
         { label: 'Home', path: '/', icon: <Home /> },
         { label: 'Projects', path: '/projects', icon: <Dashboard /> },
@@ -115,6 +130,17 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
         { label: 'Sprints', path: '/sprints', icon: <Assignment /> },
         { label: 'Issues', path: '/issues', icon: <BugReport /> },
         { label: 'Backlog', path: '/backlog', icon: <BugReport /> },
+        { label: 'Epics', path: '/epics', icon: <AutoStories /> },
+        { 
+            label: 'Analytics', 
+            path: '/analytics', 
+            icon: <Analytics />,
+            subItems: [
+                { label: 'Project Analytics', path: '/projects/analytics', icon: <Assessment /> },
+                { label: 'Team Performance', path: '/teams/analytics', icon: <Group /> },
+                { label: 'Reports', path: '/reports', icon: <CloudDownload /> },
+            ]
+        },
     ];
 
     const handleLogout = () => {
@@ -127,22 +153,68 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
             <Toolbar>
                 <Box sx={{ flexGrow: 1, display: 'flex', gap: 2 }}>
                     {menuItems.map((item) => (
-                        <Button
-                            key={item.label}
-                            color="inherit"
-                            component={RouterLink}
-                            to={item.path}
-                            startIcon={item.icon}
-                            sx={{
-                                textTransform: 'none',
-                                fontWeight: 'bold',
-                                '&:hover': {
-                                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                                },
-                            }}
-                        >
-                            {item.label}
-                        </Button>
+                        item.subItems ? (
+                            <React.Fragment key={item.label}>
+                                <Button
+                                    color="inherit"
+                                    onClick={handleAnalyticsClick}
+                                    startIcon={item.icon}
+                                    sx={{
+                                        textTransform: 'none',
+                                        fontWeight: 'bold',
+                                        '&:hover': {
+                                            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                                        },
+                                    }}
+                                >
+                                    {item.label}
+                                </Button>
+                                <MuiMenu
+                                    anchorEl={analyticsMenuAnchor}
+                                    open={Boolean(analyticsMenuAnchor)}
+                                    onClose={handleAnalyticsClose}
+                                    anchorOrigin={{
+                                        vertical: 'bottom',
+                                        horizontal: 'left',
+                                    }}
+                                >
+                                    {item.subItems.map((subItem) => (
+                                        <MenuItem
+                                            key={subItem.label}
+                                            onClick={() => {
+                                                navigate(subItem.path);
+                                                handleAnalyticsClose();
+                                            }}
+                                            sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 1,
+                                            }}
+                                        >
+                                            {subItem.icon}
+                                            {subItem.label}
+                                        </MenuItem>
+                                    ))}
+                                </MuiMenu>
+                            </React.Fragment>
+                        ) : (
+                            <Button
+                                key={item.label}
+                                color="inherit"
+                                component={RouterLink}
+                                to={item.path}
+                                startIcon={item.icon}
+                                sx={{
+                                    textTransform: 'none',
+                                    fontWeight: 'bold',
+                                    '&:hover': {
+                                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                                    },
+                                }}
+                            >
+                                {item.label}
+                            </Button>
+                        )
                     ))}
                 </Box>
 

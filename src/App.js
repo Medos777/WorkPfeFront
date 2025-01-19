@@ -14,6 +14,7 @@ const ListProject = lazy(() => import('./Project/ListProject'));
 const AiProjectCreation = lazy(() => import('./Project/AiProjectCreation'));
 const TeamComponent = lazy(() => import('./Team/TeamComponent'));
 const IssueList = lazy(() => import('./Issue/IssueList'));
+const AddIssue = lazy(() => import('./Issue/AddIssue'));
 const SprintList = lazy(() => import('./Sprint/SprintList'));
 const ListBacklog = lazy(() => import('./Backlog/ListBacklog'));
 const AddBacklog = lazy(() => import('./Backlog/AddBacklog'));
@@ -22,6 +23,12 @@ const BacklogItems = lazy(() => import('./BacklogItems/BacklogItems'));
 const AddTemplate = lazy(() => import('./Template/AddTemplate'));
 const EditTemplate = lazy(() => import('./Template/EditTemplate'));
 const ListTemplate = lazy(() => import('./Template/ListTemplate'));
+const AddEpic = lazy(() => import('./Epic/AddEpic'));
+const EpicList = lazy(() => import('./Epic/EpicList'));
+const ProjectAnalytics = lazy(() => import('./components/Dashboard/ProjectAnalytics'));
+const ProjectChat = lazy(() => import('./components/Collaboration/ProjectChat'));
+const TeamAnalytics = lazy(() => import('./components/Analytics/TeamAnalytics'));
+const Reports = lazy(() => import('./components/Reports/Reports'));
 
 const theme = createTheme({
     palette: {
@@ -66,28 +73,32 @@ function App() {
                                         <Dashboard onLogout={handleLogout} />
                                     </AuthGuard>
                                 }
-                            /><Route
+                            />
+                            <Route
                                 path="/backlog"
                                 element={
                                     <AuthGuard isLoggedIn={isLoggedIn}>
                                         <ListBacklog/>
                                     </AuthGuard>
                                 }
-                            /><Route
+                            />
+                            <Route
                                 path="/backlog/add"
                                 element={
                                     <AuthGuard isLoggedIn={isLoggedIn}>
                                         <AddBacklog/>
                                     </AuthGuard>
                                 }
-                            /><Route
+                            />
+                            <Route
                                 path="/backlogItemsTest"
                                 element={
                                     <AuthGuard isLoggedIn={isLoggedIn}>
                                         <ListBacklogItems/>
                                     </AuthGuard>
                                 }
-                            /><Route
+                            />
+                            <Route
                                 path="/backlogItems"
                                 element={
                                     <AuthGuard isLoggedIn={isLoggedIn}>
@@ -135,11 +146,36 @@ function App() {
                                     </AuthGuard>
                                 }
                             />
+                            {/* Issue Routes */}
                             <Route
                                 path="/issues"
                                 element={
                                     <AuthGuard isLoggedIn={isLoggedIn}>
                                         <IssueList />
+                                    </AuthGuard>
+                                }
+                            />
+                            <Route
+                                path="/issues/add"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <AddIssue />
+                                    </AuthGuard>
+                                }
+                            />
+                            <Route
+                                path="/projects/:projectId/issues"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <IssueList />
+                                    </AuthGuard>
+                                }
+                            />
+                            <Route
+                                path="/projects/:projectId/issues/add"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <AddIssue />
                                     </AuthGuard>
                                 }
                             />
@@ -175,9 +211,83 @@ function App() {
                                     </AuthGuard>
                                 }
                             />
+                            {/* Epic Routes */}
+                            <Route
+                                path="/epics"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <EpicList />
+                                    </AuthGuard>
+                                }
+                            />
+                            <Route
+                                path="/projects/:projectId/epics"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <EpicList />
+                                    </AuthGuard>
+                                }
+                            />
+                            <Route
+                                path="/projects/:projectId/epics/add"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <AddEpic />
+                                    </AuthGuard>
+                                }
+                            />
+                            {/* Analytics Routes */}
+                            <Route
+                                path="/projects/analytics"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <ProjectAnalytics />
+                                    </AuthGuard>
+                                }
+                            />
+                            <Route
+                                path="/teams/analytics"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <TeamAnalytics />
+                                    </AuthGuard>
+                                }
+                            />
+                            <Route
+                                path="/reports"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <Reports />
+                                    </AuthGuard>
+                                }
+                            />
+                            <Route
+                                path="/projects/:projectId/analytics"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <ProjectAnalytics />
+                                    </AuthGuard>
+                                }
+                            />
+                            {/* Project Chat Route */}
+                            <Route
+                                path="/projects/:projectId/chat"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <ProjectChat currentUser={{ id: localStorage.getItem('userId') }} />
+                                    </AuthGuard>
+                                }
+                            />
+                            {/* Default Route */}
                             <Route
                                 path="/"
-                                element={<Navigate to={isLoggedIn ? "/dashboard" : "/login"} replace />}
+                                element={
+                                    isLoggedIn ? (
+                                        <Navigate to="/dashboard" replace />
+                                    ) : (
+                                        <Navigate to="/login" replace />
+                                    )
+                                }
                             />
                         </Routes>
                     </Suspense>
