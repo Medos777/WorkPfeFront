@@ -15,13 +15,17 @@ import {
     Button,
     TablePagination,
     Chip,
-    TableSortLabel,
-    TextField,
-    InputAdornment,
+    ButtonGroup,
+    Tooltip,
     Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,
+    TextField,
+    MenuItem,
+    Accordion,
+    AccordionSummary,
+    AccordionDetails,
 } from "@mui/material";
 import {
     Edit as EditIcon,
@@ -30,9 +34,21 @@ import {
     Add as AddIcon,
     Assessment as AssessmentIcon,
     Timeline as TimelineIcon,
+    ViewList as ViewListIcon,
+    ViewModule as ViewModuleIcon,
+    CalendarToday as CalendarIcon,
+    Group as GroupIcon,
+    Business as BusinessIcon,
+    FilterList as FilterListIcon,
+    ExpandMore as ExpandMoreIcon,
+    Description as DescriptionIcon,
+    Email as EmailIcon,
+    LocationOn as LocationIcon,
     ArrowUpward as ArrowUpwardIcon,
     ArrowDownward as ArrowDownwardIcon,
 } from "@mui/icons-material";
+import 'bootstrap/dist/css/bootstrap.min.css';
+import './ListProject.css';
 
 const ListProject = () => {
     const navigate = useNavigate();
@@ -43,6 +59,14 @@ const ListProject = () => {
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [projectToDelete, setProjectToDelete] = useState(null);
+    const [viewMode, setViewMode] = useState('table'); // 'table' or 'card'
+    const [selectedProject, setSelectedProject] = useState(null);
+    const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+    const [filters, setFilters] = useState({
+        status: '',
+        startDate: '',
+        endDate: '',
+    });
 
     useEffect(() => {
         retrieveProjects();
@@ -108,17 +132,24 @@ const ListProject = () => {
 
     const sortedProjects = sortProjects(filteredProjects);
 
-    const paginatedProjects = sortedProjects.slice(
+    const filteredAndSortedProjects = sortedProjects.filter(project => {
+        const matchesStatus = !filters.status || project.status === filters.status;
+        const matchesStartDate = !filters.startDate || new Date(project.startDate) >= new Date(filters.startDate);
+        const matchesEndDate = !filters.endDate || new Date(project.endDate) <= new Date(filters.endDate);
+        return matchesStatus && matchesStartDate && matchesEndDate;
+    });
+
+    const paginatedProjects = filteredAndSortedProjects.slice(
         page * rowsPerPage,
         page * rowsPerPage + rowsPerPage
     );
 
     const handleCreateProject = () => {
-        navigate("/projects/create");
+        navigate("/projects/add");
     };
 
     const handleEditProject = (projectId) => {
-        navigate(`/projects/edit/${projectId}`);
+        navigate(`/projects/update/${projectId}`);
     };
 
     const handleDeleteClick = (project) => {
@@ -155,6 +186,13 @@ const ListProject = () => {
         navigate(`/projects/${projectId}/timeline`);
     };
 
+    const handleFilterChange = (field, value) => {
+        setFilters(prev => ({
+            ...prev,
+            [field]: value
+        }));
+    };
+
     const getStatusColor = (status) => {
         switch (status?.toLowerCase()) {
             case "active":
@@ -170,141 +208,345 @@ const ListProject = () => {
         }
     };
 
-    return (
-        <Box sx={{ width: '100%', p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h4" component="h1">
-                    Projects
-                </Typography>
-                <Button
-                    variant="contained"
-                    color="primary"
-                    startIcon={<AddIcon />}
-                    onClick={handleCreateProject}
-                >
-                    Create Project
-                </Button>
-            </Box>
+    const statusOptions = ['Active', 'Completed', 'On Hold', 'Cancelled'];
 
-            <TextField
-                fullWidth
-                variant="outlined"
-                placeholder="Search projects..."
-                value={searchTerm}
-                onChange={handleSearch}
-                sx={{ mb: 3 }}
-                InputProps={{
-                    startAdornment: (
-                        <InputAdornment position="start">
-                            <SearchIcon />
-                        </InputAdornment>
-                    ),
+    const renderTableContent = () => {
+        return filteredProjects.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((project, index) => (
+            <TableRow 
+                key={project.id}
+                onClick={(e) => {
+                    if (!e.target.closest('button')) {
+                        localStorage.setItem('projectType', project.projectType);
+                        window.dispatchEvent(new Event('storage'));
+                        navigate(`/projects/${project.id}`);
+                    }
                 }}
-            />
+                style={{ cursor: 'pointer' }}
+                hover
+            >
+                <TableCell>{project.projectName}</TableCell>
+                <TableCell>
+                    <div className="text-truncate" style={{ maxWidth: '200px' }}>
+                        {project.description}
+                    </div>
+                </TableCell>
+                <TableCell>
+                    <Chip
+                        label={project.status || 'Active'}
+                        color={getStatusColor(project.status)}
+                        size="small"
+                    />
+                </TableCell>
+                <TableCell>{new Date(project.startDate).toLocaleDateString()}</TableCell>
+                <TableCell>{new Date(project.endDate).toLocaleDateString()}</TableCell>
+                <TableCell>
+                    <div className="d-flex justify-content-end gap-2">
+                        <Tooltip title="View Analytics">
+                            <IconButton 
+                                size="small" 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewAnalytics(project.id);
+                                }}
+                                className="analytics-button"
+                            >
+                                <AssessmentIcon />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="View Timeline">
+                            <IconButton 
+                                size="small" 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewTimeline(project.id);
+                                }}
+                                className="timeline-button"
+                            >
+                                <TimelineIcon />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Edit Project">
+                            <IconButton 
+                                size="small" 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditProject(project.id);
+                                }}
+                                className="edit-button"
+                            >
+                                <EditIcon />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete Project">
+                            <IconButton 
+                                size="small" 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteClick(project);
+                                }}
+                                className="delete-button"
+                            >
+                                <DeleteIcon />
+                            </IconButton>
+                        </Tooltip>
+                    </div>
+                </TableCell>
+            </TableRow>
+        ));
+    };
 
-            <TableContainer component={Paper}>
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell
-                                onClick={() => handleSort('projectName')}
-                                sx={{ cursor: 'pointer' }}
+    return (
+        <div className="container-fluid px-4 py-4">
+            <div className="row mb-4">
+                <div className="col-12">
+                    <div className="d-flex justify-content-between align-items-center bg-white rounded-3 p-4 shadow-sm">
+                        <div className="d-flex align-items-center">
+                            <BusinessIcon className="text-primary me-2" style={{ fontSize: '2rem' }} />
+                            <h2 className="mb-0">Projects</h2>
+                        </div>
+                        <div className="d-flex gap-3">
+                            <ButtonGroup variant="outlined" className="view-toggle">
+                                <Button
+                                    onClick={() => setViewMode('table')}
+                                    variant={viewMode === 'table' ? 'contained' : 'outlined'}
+                                    startIcon={<ViewListIcon />}
+                                    className={viewMode === 'table' ? 'active' : ''}
+                                >
+                                    List
+                                </Button>
+                                <Button
+                                    onClick={() => setViewMode('card')}
+                                    variant={viewMode === 'card' ? 'contained' : 'outlined'}
+                                    startIcon={<ViewModuleIcon />}
+                                    className={viewMode === 'card' ? 'active' : ''}
+                                >
+                                    Cards
+                                </Button>
+                            </ButtonGroup>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                startIcon={<AddIcon />}
+                                onClick={handleCreateProject}
+                                className="create-button"
                             >
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                    Project Name {renderSortIcon('projectName')}
-                                </Box>
-                            </TableCell>
-                            <TableCell
-                                onClick={() => handleSort('description')}
-                                sx={{ cursor: 'pointer' }}
-                            >
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                    Description {renderSortIcon('description')}
-                                </Box>
-                            </TableCell>
-                            <TableCell
-                                onClick={() => handleSort('status')}
-                                sx={{ cursor: 'pointer' }}
-                            >
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                    Status {renderSortIcon('status')}
-                                </Box>
-                            </TableCell>
-                            <TableCell align="right">Actions</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {paginatedProjects.map((project) => (
-                            <TableRow key={project.id}>
-                                <TableCell>{project.projectName}</TableCell>
-                                <TableCell>{project.description}</TableCell>
-                                <TableCell>
+                                Create Project
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="row mb-4">
+                <div className="col-12">
+                    <Accordion className="filter-accordion">
+                        <AccordionSummary
+                            expandIcon={<ExpandMoreIcon />}
+                            aria-controls="filter-content"
+                            id="filter-header"
+                        >
+                            <FilterListIcon className="me-2" />
+                            <Typography>Filters</Typography>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                            <div className="row g-3">
+                                <div className="col-12 col-md-3">
+                                    <TextField
+                                        select
+                                        fullWidth
+                                        size="small"
+                                        label="Status"
+                                        value={filters.status}
+                                        onChange={(e) => handleFilterChange('status', e.target.value)}
+                                    >
+                                        <MenuItem value="">All</MenuItem>
+                                        {statusOptions.map(status => (
+                                            <MenuItem key={status} value={status}>{status}</MenuItem>
+                                        ))}
+                                    </TextField>
+                                </div>
+                                <div className="col-12 col-md-3">
+                                    <TextField
+                                        type="date"
+                                        fullWidth
+                                        size="small"
+                                        label="Start Date"
+                                        value={filters.startDate}
+                                        onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                                        InputLabelProps={{ shrink: true }}
+                                    />
+                                </div>
+                                <div className="col-12 col-md-3">
+                                    <TextField
+                                        type="date"
+                                        fullWidth
+                                        size="small"
+                                        label="End Date"
+                                        value={filters.endDate}
+                                        onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                                        InputLabelProps={{ shrink: true }}
+                                    />
+                                </div>
+                                <div className="col-12 col-md-3">
+                                    <div className="input-group">
+                                        <span className="input-group-text bg-white border-end-0">
+                                            <SearchIcon className="text-muted" />
+                                        </span>
+                                        <input
+                                            type="text"
+                                            className="form-control border-start-0 ps-0"
+                                            placeholder="Search projects..."
+                                            value={searchTerm}
+                                            onChange={handleSearch}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </AccordionDetails>
+                    </Accordion>
+                </div>
+            </div>
+
+            {viewMode === 'table' ? (
+                <div className="row">
+                    <div className="col-12">
+                        <div className="table-responsive">
+                            <TableContainer component={Paper} className="table-container">
+                                <Table className="table table-hover">
+                                    <TableHead>
+                                        <TableRow className="table-header">
+                                            <TableCell className="fw-bold">Project Name</TableCell>
+                                            <TableCell className="fw-bold">Description</TableCell>
+                                            <TableCell className="fw-bold">Status</TableCell>
+                                            <TableCell className="fw-bold">Start Date</TableCell>
+                                            <TableCell className="fw-bold">End Date</TableCell>
+                                            <TableCell className="fw-bold text-end">Actions</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {renderTableContent()}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="row g-4">
+                    {paginatedProjects.map((project) => (
+                        <div key={project.id} className="col-12 col-md-6 col-lg-4">
+                            <div className="card h-100 project-card shadow-sm">
+                                <div className="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
                                     <Chip
-                                        label={project.status}
+                                        label={project.status || 'Active'}
                                         color={getStatusColor(project.status)}
                                         size="small"
+                                        className="status-chip"
                                     />
-                                </TableCell>
-                                <TableCell align="right">
-                                    <IconButton
-                                        color="primary"
-                                        onClick={() => handleViewAnalytics(project.id)}
-                                        title="View Analytics"
-                                    >
-                                        <AssessmentIcon />
-                                    </IconButton>
-                                    <IconButton
-                                        color="primary"
-                                        onClick={() => handleViewTimeline(project.id)}
-                                        title="View Timeline"
-                                    >
-                                        <TimelineIcon />
-                                    </IconButton>
-                                    <IconButton
-                                        color="primary"
-                                        onClick={() => handleEditProject(project.id)}
-                                        title="Edit Project"
-                                    >
-                                        <EditIcon />
-                                    </IconButton>
-                                    <IconButton
-                                        color="error"
-                                        onClick={() => handleDeleteClick(project)}
-                                        title="Delete Project"
-                                    >
-                                        <DeleteIcon />
-                                    </IconButton>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+                                    <div className="project-actions">
+                                        <Tooltip title="View Analytics">
+                                            <IconButton 
+                                                size="small" 
+                                                onClick={() => handleViewAnalytics(project.id)}
+                                                className="action-button"
+                                            >
+                                                <AssessmentIcon />
+                                            </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title="View Timeline">
+                                            <IconButton 
+                                                size="small" 
+                                                onClick={() => handleViewTimeline(project.id)}
+                                                className="action-button"
+                                            >
+                                                <TimelineIcon />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </div>
+                                </div>
+                                <div className="card-body">
+                                    <h5 className="card-title text-primary mb-3">{project.projectName}</h5>
+                                    <p className="card-text text-muted project-description">
+                                        {project.description}
+                                    </p>
+                                    <div className="project-info">
+                                        <div className="info-item">
+                                            <CalendarIcon className="info-icon" />
+                                            <span className="info-text">
+                                                {new Date(project.startDate).toLocaleDateString()} - {new Date(project.endDate).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                        <div className="info-item">
+                                            <GroupIcon className="info-icon" />
+                                            <span className="info-text">
+                                                {project.teams?.length || 0} Teams
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="card-footer bg-transparent border-0">
+                                    <div className="d-flex justify-content-end gap-2">
+                                        <button
+                                            className="btn btn-outline-primary btn-sm"
+                                            onClick={() => handleEditProject(project.id)}
+                                        >
+                                            <EditIcon fontSize="small" /> Edit
+                                        </button>
+                                        <button
+                                            className="btn btn-outline-danger btn-sm"
+                                            onClick={() => handleDeleteClick(project)}
+                                        >
+                                            <DeleteIcon fontSize="small" /> Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
 
-            <TablePagination
-                rowsPerPageOptions={[5, 10, 25]}
-                component="div"
-                count={filteredProjects.length}
-                rowsPerPage={rowsPerPage}
-                page={page}
-                onPageChange={handleChangePage}
-                onRowsPerPageChange={handleChangeRowsPerPage}
-            />
+            <div className="row mt-4">
+                <div className="col-12">
+                    <TablePagination
+                        component="div"
+                        count={filteredAndSortedProjects.length}
+                        page={page}
+                        onPageChange={handleChangePage}
+                        rowsPerPage={rowsPerPage}
+                        onRowsPerPageChange={handleChangeRowsPerPage}
+                        className="bg-white rounded shadow-sm"
+                    />
+                </div>
+            </div>
 
             <Dialog
                 open={deleteDialogOpen}
                 onClose={handleDeleteCancel}
+                maxWidth="md"
+                fullWidth
             >
-                <DialogTitle>Confirm Delete</DialogTitle>
+                <DialogTitle>
+                    <div className="d-flex align-items-center">
+                        <DescriptionIcon className="me-2" />
+                        Confirm Delete
+                    </div>
+                </DialogTitle>
                 <DialogContent>
-                    Are you sure you want to delete the project "{projectToDelete?.projectName}"?
+                    Are you sure you want to delete project "{projectToDelete?.projectName}"?
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleDeleteCancel}>Cancel</Button>
-                    <Button onClick={handleDeleteConfirm} color="error">Delete</Button>
+                    <Button 
+                        variant="contained" 
+                        color="error" 
+                        onClick={handleDeleteConfirm}
+                    >
+                        Delete
+                    </Button>
                 </DialogActions>
             </Dialog>
-        </Box>
+        </div>
     );
 };
 

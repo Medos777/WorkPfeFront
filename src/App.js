@@ -11,6 +11,7 @@ const Dashboard = lazy(() => import('./Dashboard/Dashboard'));
 const AddProject = lazy(() => import('./Project/AddProject'));
 const UpdateProject = lazy(() => import('./Project/UpdateProject'));
 const ListProject = lazy(() => import('./Project/ListProject'));
+const ProjectDetails = lazy(() => import('./Project/ProjectDetails'));
 const AiProjectCreation = lazy(() => import('./Project/AiProjectCreation'));
 const TeamComponent = lazy(() => import('./Team/TeamComponent'));
 const IssueList = lazy(() => import('./Issue/IssueList'));
@@ -135,6 +136,14 @@ function App() {
                                 element={
                                     <AuthGuard isLoggedIn={isLoggedIn}>
                                         <ListProject />
+                                    </AuthGuard>
+                                }
+                            />
+                            <Route
+                                path="/projects/:id"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <ProjectDetails />
                                     </AuthGuard>
                                 }
                             />
@@ -278,6 +287,33 @@ function App() {
                                     </AuthGuard>
                                 }
                             />
+                            <Route path="/project/:projectId/epics" element={
+                                <AuthGuard>
+                                    <Layout>
+                                        <Suspense fallback={<div>Loading...</div>}>
+                                            <EpicList />
+                                        </Suspense>
+                                    </Layout>
+                                </AuthGuard>
+                            } />
+                            <Route path="/project/:projectId/issues" element={
+                                <AuthGuard>
+                                    <Layout>
+                                        <Suspense fallback={<div>Loading...</div>}>
+                                            <IssueList />
+                                        </Suspense>
+                                    </Layout>
+                                </AuthGuard>
+                            } />
+                            <Route path="/project/:projectId/backlog" element={
+                                <AuthGuard>
+                                    <Layout>
+                                        <Suspense fallback={<div>Loading...</div>}>
+                                            <ListBacklog />
+                                        </Suspense>
+                                    </Layout>
+                                </AuthGuard>
+                            } />
                             {/* Default Route */}
                             <Route
                                 path="/"

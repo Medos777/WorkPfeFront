@@ -1,170 +1,235 @@
-import React, {useEffect, useState} from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Button, TextField, Typography, Container, Link, CssBaseline, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
+import {
+    Box,
+    Button,
+    TextField,
+    Typography,
+    Container,
+    Link,
+    CssBaseline,
+    Paper,
+    Grid,
+    IconButton,
+    InputAdornment,
+} from '@mui/material';
+import { Visibility, VisibilityOff } from '@mui/icons-material';
 import loginservice from "../service/LoginService";
-
 import { toast, ToastContainer } from "react-toastify";
-import { jwtDecode } from "jwt-decode"; // Correct way to import
+import { jwtDecode } from "jwt-decode";
+import logo from '../assets/logo.svg';
 
 export { logout };
 
 const logout = () => {
-    console.log("logout");
     localStorage.removeItem("token");
     localStorage.removeItem("isLoggedIn");
-
-
 };
 
 export default function Login() {
     const navigate = useNavigate();
-
-    // State for email, password, and role
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [role, setRole] = useState("");
-    const [login, setLogin] = useState([]);
-    const [userId, setUserId] = useState(null);
+    const [showPassword, setShowPassword] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [userId, setUserId] = useState(null);
+
+    useEffect(() => {
+        const token = localStorage.getItem("token");
+        if (token) {
+            setIsLoggedIn(true);
+            navigate("/teams");
+        } else {
+            setIsLoggedIn(false);
+        }
+    }, []);
+
+    const handleSubmit = (event) => {
+        event.preventDefault();
+        const login = { email, password };
+        loginservice.login(login)
+            .then((res) => {
+                localStorage.setItem("isLoggedIn", true);
+                localStorage.setItem("token", res.data.token);
+                const decodedToken = jwtDecode(res.data.token);
+                const userId = decodedToken.userId;
+                const role = decodedToken.role;
+                localStorage.setItem("userId", userId);
+                localStorage.setItem("role", role);
+                setUserId(userId);
+                navigate('/dashboard');
+            })
+            .catch((error) => {
+                console.error("Login error:", error);
+                toast.error("Invalid credentials. Please try again.");
+            });
+    };
 
     const handleSignUpClick = (event) => {
         event.preventDefault();
         navigate('/signup');
     };
-    useEffect(() => {
-        // Get the token from local storage.
-        const token = localStorage.getItem("token");
-
-        // If the token exists, the user is logged in.
-        if (token) {
-            // Set the `isLoggedIn` state variable to `true`.
-            setIsLoggedIn(true);
-
-            // Navigate to the home page.
-            navigate("/teams");
-        } else {
-            // The user is not logged in.
-            // Set the `isLoggedIn` state variable to `false`.
-            setIsLoggedIn(false);
-        }
-    }, []);
-    const logout = () => {
-        console.log("logout");
-        localStorage.removeItem("token");
-        localStorage.removeItem("isLoggedIn");
-
-
-    };
-    const handleSubmit = (event) => {
-        event.preventDefault();
-        console.log({ email, password, role });
-        const login = {email,password,role};
-        loginservice.login(login)
-            .then((res) => {
-                console.log("avec succee");
-                console.log(login);
-                console.log(res.data);
-                localStorage.setItem("isLoggedIn", true);
-                console.log(localStorage)
-                localStorage.setItem("token", res.data.token);
-                const decodedToken = jwtDecode(res.data.token);
-                console.log("Decoded Token:", decodedToken);
-                const userEmail = decodedToken.email;
-                const userId = decodedToken.userId;
-                const role = decodedToken.role;
-                console.log(userId);
-                localStorage.getItem("userId",userId);
-                console.log(userEmail);
-                setUserId(decodedToken.userId);
-                console.log(userId);
-                localStorage.setItem("userId", userId);
-                setUserId(decodedToken.userId);
-                localStorage.setItem("role",role);
-                console.log(userId);
-                console.log(localStorage.getItem("isLoggedIn"));
-
-                navigate('/dashboard');
-            })
-            .catch((error) => {
-                console.log("erreur", error);
-            });
-    };
 
     return (
-        <Container component="main" maxWidth="xs">
-            <CssBaseline />
-            <Box
-                sx={{
-                    marginTop: 8,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                }}
-            >
-                <Typography component="h1" variant="h5" sx={{ mb: 2 }}>
-                    Log in to your account
-                </Typography>
-                <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
-                    <TextField
-                        margin="normal"
-                        required
-                        fullWidth
-                        id="email"
-                        label="Email Address"
-                        name="email"
-                        autoComplete="email"
-                        autoFocus
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                    />
-                    <TextField
-                        margin="normal"
-                        required
-                        fullWidth
-                        name="password"
-                        label="Password"
-                        type="password"
-                        id="password"
-                        autoComplete="current-password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+        <Box
+            sx={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+                padding: 3,
+            }}
+        >
+            <Container component="main" maxWidth="sm">
+                <Paper
+                    elevation={6}
+                    sx={{
+                        padding: 4,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        background: 'rgba(255, 255, 255, 0.9)',
+                        borderRadius: 2,
+                    }}
+                >
+                    <Box
+                        component="img"
+                        src={logo}
+                        alt="TaskFlow Logo"
+                        sx={{
+                            height: 60,
+                            mb: 4,
+                        }}
                     />
 
-
-                    <FormControl fullWidth sx={{ mt: 2 }}>
-                        <InputLabel id="role-select-label">Role</InputLabel>
-                        <Select
-                            labelId="role-select-label"
-                            id="role"
-                            value={role}
-                            label="Role"
-                            onChange={(e) => setRole(e.target.value)}
-                            required
-                        >
-                            <MenuItem value="admin">Admin</MenuItem>
-                            <MenuItem value="manager">Manager</MenuItem>
-                            <MenuItem value="developer">Developer</MenuItem>
-                        </Select>
-                    </FormControl>
-
-                    <Button
-                        type="submit"
-                        fullWidth
-                        variant="contained"
-                        sx={{ mt: 3, mb: 2 }}
+                    <Typography 
+                        component="h1" 
+                        variant="h4" 
+                        sx={{ 
+                            mb: 3,
+                            color: '#1976d2',
+                            fontWeight: 'bold',
+                        }}
                     >
-                        Log In
-                    </Button>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                        <Link href="#" variant="body2">
-                            Forgot password?
-                        </Link>
-                        <Link href="#" onClick={handleSignUpClick} variant="body2">
-                            Sign Up
-                        </Link>
+                        Welcome Back
+                    </Typography>
+
+                    <Box 
+                        component="form" 
+                        onSubmit={handleSubmit} 
+                        sx={{ 
+                            width: '100%',
+                            mt: 1,
+                        }}
+                    >
+                        <TextField
+                            margin="normal"
+                            required
+                            fullWidth
+                            id="email"
+                            label="Email Address"
+                            name="email"
+                            autoComplete="email"
+                            autoFocus
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    '&:hover fieldset': {
+                                        borderColor: '#1976d2',
+                                    },
+                                },
+                            }}
+                        />
+
+                        <TextField
+                            margin="normal"
+                            required
+                            fullWidth
+                            name="password"
+                            label="Password"
+                            type={showPassword ? 'text' : 'password'}
+                            id="password"
+                            autoComplete="current-password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            InputProps={{
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <IconButton
+                                            aria-label="toggle password visibility"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            edge="end"
+                                        >
+                                            {showPassword ? <VisibilityOff /> : <Visibility />}
+                                        </IconButton>
+                                    </InputAdornment>
+                                ),
+                            }}
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    '&:hover fieldset': {
+                                        borderColor: '#1976d2',
+                                    },
+                                },
+                            }}
+                        />
+
+                        <Button
+                            type="submit"
+                            fullWidth
+                            variant="contained"
+                            sx={{
+                                mt: 3,
+                                mb: 2,
+                                py: 1.5,
+                                backgroundColor: '#1976d2',
+                                '&:hover': {
+                                    backgroundColor: '#1565c0',
+                                },
+                                fontWeight: 'bold',
+                            }}
+                        >
+                            Log In
+                        </Button>
+
+                        <Grid container spacing={2} sx={{ mt: 2 }}>
+                            <Grid item xs={12} sm={6}>
+                                <Link 
+                                    href="#" 
+                                    variant="body2"
+                                    sx={{
+                                        color: '#1976d2',
+                                        textDecoration: 'none',
+                                        '&:hover': {
+                                            textDecoration: 'underline',
+                                        },
+                                    }}
+                                >
+                                    Forgot password?
+                                </Link>
+                            </Grid>
+                            <Grid item xs={12} sm={6} sx={{ textAlign: 'right' }}>
+                                <Link
+                                    href="#"
+                                    onClick={handleSignUpClick}
+                                    variant="body2"
+                                    sx={{
+                                        color: '#1976d2',
+                                        textDecoration: 'none',
+                                        '&:hover': {
+                                            textDecoration: 'underline',
+                                        },
+                                    }}
+                                >
+                                    Don't have an account? Sign Up
+                                </Link>
+                            </Grid>
+                        </Grid>
                     </Box>
-                </Box>
-            </Box>
-        </Container>
+                </Paper>
+            </Container>
+            <ToastContainer position="top-right" autoClose={5000} />
+        </Box>
     );
 }

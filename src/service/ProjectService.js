@@ -12,6 +12,10 @@ const get = id => {
     return httpClient.get(`/projects/${id}`);
 };
 
+const getProjectById = id => {
+    return httpClient.get(`/projects/id/${id}`);
+};
+
 const update = (id, data) => {
     return httpClient.put(`/projects/${id}`, data);
 };
@@ -70,8 +74,8 @@ const getProjectPerformance = projectId => {
 
 export default {
     getAll,
-    create,
     get,
+    create,
     update,
     remove,
     removeAll,
@@ -85,5 +89,5 @@ export default {
     exportProjectReport,
     scheduleReport,
     getProjectAnalytics,
-    getProjectPerformance
+    getProjectById
 };

@@ -19,7 +19,23 @@ const update = (sprintId, sprintData) => {
 const deleteSprint = (sprintId) => {
     return httpClient.delete(`/sprints/${sprintId}`);
 };
+
 const updateBacklogItems = (sprintId, backlogItemId) => {
     console.log('Sending backlogItemId:', backlogItemId);
-    return httpClient.put(`/sprints/${sprintId}/backlogItems`, { backlogItemId });};
-export default { getAll, create, deleteSprint, getSprint, update,updateBacklogItems };
+    return httpClient.put(`/sprints/${sprintId}/backlogItems`, { backlogItemId });
+};
+
+const getByProject = (projectId) => {
+    console.log('Fetching sprints for project:', projectId);
+    return httpClient.get(`/sprints/project/${projectId}`);
+};
+
+export default { 
+    getAll, 
+    getSprint, 
+    create, 
+    update, 
+    deleteSprint, 
+    updateBacklogItems, 
+    getByProject 
+};

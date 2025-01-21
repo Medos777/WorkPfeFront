@@ -4,20 +4,30 @@ const getAll = () => {
     return httpClient.get('/Backlogs');
 };
 
-const get = (BacklogsId) => {
-    return httpClient.get(`/Backlogs/id/${BacklogsId}`);
+const getById = id => {
+    return httpClient.get(`/Backlogs/id/${id}`);
 };
 
-const create = (BacklogsData) => {
-    return httpClient.post('/Backlogs', BacklogsData);
+const getByProject = (projectId) => {
+    return httpClient.get(`/Backlogs/projectId/${projectId}`);
+};
+const create = data => {
+    return httpClient.post('/Backlogs', data);
 };
 
-const update = (BacklogsId, BacklogsData) => {
-    return httpClient.put(`/Backlogs/${BacklogsId}`, BacklogsData);
+const update = (id, data) => {
+    return httpClient.put(`/Backlogs/${id}`, data);
 };
 
-const deleteacklog = (BacklogsId) => {
-    return httpClient.delete(`/Backlogs/${BacklogsId}`);
+const remove = id => {
+    return httpClient.delete(`/Backlogs/${id}`);
 };
 
-export default { getAll, create, deleteacklog, get, update };
+export default {
+    getAll,
+    getById,
+    getByProject,
+    create,
+    update,
+    remove
+};

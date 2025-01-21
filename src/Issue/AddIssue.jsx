@@ -23,6 +23,7 @@ import IssueService from '../service/IssueService';
 import ProjectService from '../service/ProjectService';
 import SprintService from '../service/SprintService';
 import UserService from '../service/UserService';
+import EpicService from '../service/EpicService';
 
 const issueTypes = [
     { value: 'story', label: 'Story' },
@@ -41,6 +42,8 @@ const priorities = [
 
 const AddIssue = () => {
     const { projectId } = useParams();
+    const navigate = useNavigate();
+    
     const [formData, setFormData] = useState({
         title: '',
         description: '',
@@ -51,7 +54,7 @@ const AddIssue = () => {
         sprint: '',
         epic: '',
         assignee: '',
-        reporter: '',
+        reporter: localStorage.getItem('userId') || '',
         storyPoints: '',
         originalEstimate: '',
         remainingEstimate: '',
@@ -69,70 +72,61 @@ const AddIssue = () => {
     const [users, setUsers] = useState([]);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const navigate = useNavigate();
 
+    // Fetch initial data
     useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            setError('');
+        const fetchInitialData = async () => {
             try {
-                // Fetch all data in parallel
-                const [projectsRes, usersRes] = await Promise.all([
-                    ProjectService.getAll(),
-                    UserService.getAll()
+                setLoading(true);
+                const projectsRes = await ProjectService.getAll();
+                const usersRes = await UserService.getAll();
+
+                console.log('Raw Projects Response:', projectsRes);
+                console.log('Projects Data Structure:', projectsRes.data);
+                
+                if (projectsRes.data && Array.isArray(projectsRes.data)) {
+                    setProjects(projectsRes.data);
+                    console.log('Set Projects State:', projectsRes.data);
+                } else {
+                    console.error('Projects data is not an array:', projectsRes.data);
+                }
+
+                setUsers(usersRes.data || []);
+            } catch (err) {
+                console.error('Error fetching initial data:', err);
+                setError('Failed to load initial data');
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchInitialData();
+    }, []);
+
+    // Fetch project-specific data when project changes
+    useEffect(() => {
+        const fetchProjectData = async () => {
+            try {
+                setLoading(true);
+                const [sprintsRes, epicsRes] = await Promise.all([
+                    SprintService.getAll(),
+                    EpicService.getAll()
                 ]);
 
-                setProjects(projectsRes.data || []);
-                setUsers(usersRes.data || []);
+                console.log('All Sprints:', sprintsRes.data);
+                console.log('All Epics:', epicsRes.data);
 
-                // If we have a project ID, fetch related data
-                if (formData.project) {
-                    const [sprintsRes, epicsRes] = await Promise.all([
-                        SprintService.getByProject(formData.project),
-                        IssueService.getByProject(formData.project)
-                    ]);
-
-                    setSprints(sprintsRes.data || []);
-                    
-                    // Filter epics from issues
-                    const projectEpics = epicsRes.data?.filter(issue => 
-                        issue.type === 'epic'
-                    ) || [];
-                    setEpics(projectEpics);
-                } else {
-                    setSprints([]);
-                    setEpics([]);
-                }
-            } catch (error) {
-                console.error('Error fetching data:', error);
-                setError('Failed to load data. Please try again.');
+                setSprints(sprintsRes.data || []);
+                setEpics(epicsRes.data || []);
+            } catch (err) {
+                console.error('Error fetching project data:', err);
+                setError('Failed to load project data');
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchData();
-    }, [formData.project]);
-
-    const handleSubmit = async (event) => {
-        event.preventDefault();
-        setLoading(true);
-        setError('');
-        setSuccess('');
-
-        try {
-            const response = await IssueService.create(formData);
-            setSuccess('Issue created successfully!');
-            setTimeout(() => {
-                navigate(projectId ? `/projects/${projectId}/issues` : '/issues');
-            }, 2000);
-        } catch (error) {
-            console.error('Error creating issue:', error);
-            setError(error.response?.data?.message || 'Failed to create issue');
-        } finally {
-            setLoading(false);
-        }
-    };
+        fetchProjectData();
+    }, []);
 
     const handleChange = (event) => {
         const { name, value } = event.target;
@@ -141,6 +135,7 @@ const AddIssue = () => {
             [name]: value
         }));
 
+        // Clear dependent fields when project changes
         if (name === 'project') {
             setFormData(prev => ({
                 ...prev,
@@ -150,77 +145,101 @@ const AddIssue = () => {
         }
     };
 
-    const handleLabelsChange = (event, newValue) => {
-        setFormData(prev => ({
-            ...prev,
-            labels: newValue
-        }));
-    };
+    const handleSubmit = async (event) => {
+        event.preventDefault();
+        setLoading(true);
+        setError('');
+        setSuccess('');
 
-    const handleComponentsChange = (event, newValue) => {
-        setFormData(prev => ({
-            ...prev,
-            components: newValue
-        }));
+        try {
+            await IssueService.create(formData);
+            setSuccess('Issue created successfully!');
+            setTimeout(() => {
+                navigate(projectId ? `/projects/${projectId}/issues` : '/issues');
+            }, 2000);
+        } catch (err) {
+            console.error('Error creating issue:', err);
+            setError(err.response?.data?.message || 'Failed to create issue');
+        } finally {
+            setLoading(false);
+        }
     };
-
-    const validateForm = () => {
-        if (!formData.title.trim()) return 'Title is required';
-        if (!formData.description.trim()) return 'Description is required';
-        if (!formData.type) return 'Type is required';
-        if (!formData.priority) return 'Priority is required';
-        if (!formData.project) return 'Project is required';
-        if (!formData.reporter) return 'Reporter is required';
-        return null;
-    };
-
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
-                <CircularProgress />
-            </Box>
-        );
-    }
 
     return (
         <Container component="main" maxWidth="md">
             <CssBaseline />
             <Box sx={{ mt: 4, mb: 4 }}>
-                <Typography component="h1" variant="h4" gutterBottom>
+                <Typography component="h1" variant="h5" gutterBottom>
                     Create New Issue
                 </Typography>
+
+                {error && (
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                        {error}
+                    </Alert>
+                )}
+
+                {success && (
+                    <Alert severity="success" sx={{ mb: 2 }}>
+                        {success}
+                    </Alert>
+                )}
+
                 <form onSubmit={handleSubmit}>
-                    <Grid container spacing={3}>
+                    <Grid container spacing={2}>
                         <Grid item xs={12}>
                             <TextField
                                 required
                                 fullWidth
-                                label="Title"
                                 name="title"
+                                label="Title"
                                 value={formData.title}
                                 onChange={handleChange}
                             />
                         </Grid>
+
                         <Grid item xs={12}>
                             <TextField
-                                required
                                 fullWidth
                                 multiline
                                 rows={4}
-                                label="Description"
                                 name="description"
+                                label="Description"
                                 value={formData.description}
                                 onChange={handleChange}
                             />
                         </Grid>
-                        <Grid item xs={12} md={6}>
-                            <FormControl fullWidth required>
+
+                        <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth>
+                                <InputLabel>Project</InputLabel>
+                                <Select
+                                    name="project"
+                                    value={formData.project}
+                                    onChange={handleChange}
+                                    required
+                                    disabled={!!projectId}
+                                >
+                                    {projects.map((project) => {
+                                        console.log('Rendering project:', project);
+                                        return (
+                                            <MenuItem key={project._id} value={project._id}>
+                                                {project.projectName || project.name || 'Unnamed Project'}
+                                            </MenuItem>
+                                        );
+                                    })}
+                                </Select>
+                            </FormControl>
+                        </Grid>
+
+                        <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth>
                                 <InputLabel>Type</InputLabel>
                                 <Select
                                     name="type"
                                     value={formData.type}
                                     onChange={handleChange}
-                                    label="Type"
+                                    required
                                 >
                                     {issueTypes.map((type) => (
                                         <MenuItem key={type.value} value={type.value}>
@@ -230,14 +249,57 @@ const AddIssue = () => {
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid item xs={12} md={6}>
-                            <FormControl fullWidth required>
+
+                        <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth>
+                                <InputLabel>Sprint</InputLabel>
+                                <Select
+                                    name="sprint"
+                                    value={formData.sprint}
+                                    onChange={handleChange}
+                                >
+                                    <MenuItem value="">None</MenuItem>
+                                    {sprints.map((sprint) => {
+                                        console.log('Rendering sprint:', sprint);
+                                        return (
+                                            <MenuItem key={sprint._id} value={sprint._id}>
+                                                {sprint.sprintName || sprint.name || 'Unnamed Sprint'}
+                                            </MenuItem>
+                                        );
+                                    })}
+                                </Select>
+                            </FormControl>
+                        </Grid>
+
+                        <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth>
+                                <InputLabel>Epic</InputLabel>
+                                <Select
+                                    name="epic"
+                                    value={formData.epic}
+                                    onChange={handleChange}
+                                >
+                                    <MenuItem value="">None</MenuItem>
+                                    {epics.map((epic) => {
+                                        console.log('Rendering epic:', epic);
+                                        return (
+                                            <MenuItem key={epic._id} value={epic._id}>
+                                                {epic.epicName || epic.name || epic.title || 'Unnamed Epic'}
+                                            </MenuItem>
+                                        );
+                                    })}
+                                </Select>
+                            </FormControl>
+                        </Grid>
+
+                        <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth>
                                 <InputLabel>Priority</InputLabel>
                                 <Select
                                     name="priority"
                                     value={formData.priority}
                                     onChange={handleChange}
-                                    label="Priority"
+                                    required
                                 >
                                     {priorities.map((priority) => (
                                         <MenuItem key={priority.value} value={priority.value}>
@@ -247,264 +309,62 @@ const AddIssue = () => {
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid item xs={12} md={6}>
-                            <FormControl fullWidth>
-                                <InputLabel>Project</InputLabel>
-                                <Select
-                                    name="project"
-                                    value={formData.project}
-                                    onChange={handleChange}
-                                    label="Project"
-                                    required
-                                >
-                                    {projects.map((project) => (
-                                        <MenuItem key={project._id} value={project._id}>
-                                            {project.name}
-                                        </MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                            <FormControl fullWidth>
-                                <InputLabel>Sprint</InputLabel>
-                                <Select
-                                    name="sprint"
-                                    value={formData.sprint}
-                                    onChange={handleChange}
-                                    label="Sprint"
-                                    disabled={!formData.project}
-                                >
-                                    <MenuItem value="">None</MenuItem>
-                                    {sprints.map((sprint) => (
-                                        <MenuItem key={sprint._id} value={sprint._id}>
-                                            {sprint.name}
-                                        </MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                            <FormControl fullWidth>
-                                <InputLabel>Epic</InputLabel>
-                                <Select
-                                    name="epic"
-                                    value={formData.epic}
-                                    onChange={handleChange}
-                                    label="Epic"
-                                >
-                                    <MenuItem value="">None</MenuItem>
-                                    {epics.map((epic) => (
-                                        <MenuItem key={epic._id} value={epic._id}>
-                                            {epic.title}
-                                        </MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
-                        </Grid>
-                        <Grid item xs={12} md={6}>
+
+                        <Grid item xs={12} sm={6}>
                             <FormControl fullWidth>
                                 <InputLabel>Assignee</InputLabel>
                                 <Select
                                     name="assignee"
                                     value={formData.assignee}
                                     onChange={handleChange}
-                                    label="Assignee"
                                 >
                                     <MenuItem value="">Unassigned</MenuItem>
                                     {users.map((user) => (
-                                        <MenuItem key={user._id} value={user._id}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Avatar
-                                                    src={user.avatar}
-                                                    sx={{ width: 24, height: 24 }}
-                                                >
-                                                    {user.name ? user.name.charAt(0) : '?'}
-                                                </Avatar>
-                                                {user.name}
-                                            </Box>
+                                        <MenuItem key={user.id} value={user.id}>
+                                            {user.username}
                                         </MenuItem>
                                     ))}
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid item xs={12} md={6}>
+
+                        <Grid item xs={12} sm={6}>
                             <FormControl fullWidth>
                                 <InputLabel>Reporter</InputLabel>
                                 <Select
                                     name="reporter"
                                     value={formData.reporter}
                                     onChange={handleChange}
-                                    label="Reporter"
                                     required
                                 >
                                     {users.map((user) => (
-                                        <MenuItem key={user._id} value={user._id}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Avatar
-                                                    src={user.avatar}
-                                                    sx={{ width: 24, height: 24 }}
-                                                >
-                                                    {user.name ? user.name.charAt(0) : '?'}
-                                                </Avatar>
-                                                {user.name}
-                                            </Box>
+                                        <MenuItem key={user.id} value={user.id}>
+                                            {user.username}
                                         </MenuItem>
                                     ))}
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid item xs={12} md={6}>
+
+                        <Grid item xs={12} sm={6}>
                             <TextField
                                 fullWidth
                                 type="number"
-                                label="Story Points"
                                 name="storyPoints"
+                                label="Story Points"
                                 value={formData.storyPoints}
                                 onChange={handleChange}
-                                inputProps={{ min: 0 }}
                             />
                         </Grid>
-                        <Grid item xs={12} md={6}>
-                            <TextField
-                                fullWidth
-                                type="number"
-                                label="Original Estimate (hours)"
-                                name="originalEstimate"
-                                value={formData.originalEstimate}
-                                onChange={handleChange}
-                                inputProps={{ min: 0 }}
-                            />
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                            <TextField
-                                fullWidth
-                                type="number"
-                                label="Remaining Estimate (hours)"
-                                name="remainingEstimate"
-                                value={formData.remainingEstimate}
-                                onChange={handleChange}
-                                inputProps={{ min: 0 }}
-                            />
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                            <TextField
-                                fullWidth
-                                type="number"
-                                label="Time Spent (hours)"
-                                name="timeSpent"
-                                value={formData.timeSpent}
-                                onChange={handleChange}
-                                inputProps={{ min: 0 }}
-                            />
-                        </Grid>
+
                         <Grid item xs={12}>
-                            <Autocomplete
-                                multiple
-                                freeSolo
-                                options={[]}
-                                value={formData.labels}
-                                onChange={handleLabelsChange}
-                                renderTags={(value, getTagProps) =>
-                                    value.map((option, index) => (
-                                        <Chip
-                                            label={option}
-                                            {...getTagProps({ index })}
-                                            color="primary"
-                                            variant="outlined"
-                                        />
-                                    ))
-                                }
-                                renderInput={(params) => (
-                                    <TextField
-                                        {...params}
-                                        label="Labels"
-                                        placeholder="Add labels"
-                                    />
-                                )}
-                            />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <Autocomplete
-                                multiple
-                                freeSolo
-                                options={[]}
-                                value={formData.components}
-                                onChange={handleComponentsChange}
-                                renderTags={(value, getTagProps) =>
-                                    value.map((option, index) => (
-                                        <Chip
-                                            label={option}
-                                            {...getTagProps({ index })}
-                                            color="secondary"
-                                            variant="outlined"
-                                        />
-                                    ))
-                                }
-                                renderInput={(params) => (
-                                    <TextField
-                                        {...params}
-                                        label="Components"
-                                        placeholder="Add components"
-                                    />
-                                )}
-                            />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <Autocomplete
-                                multiple
-                                freeSolo
-                                options={[]}
-                                value={formData.watchers}
-                                onChange={(event, newValue) => {
-                                    setFormData(prev => ({
-                                        ...prev,
-                                        watchers: newValue
-                                    }));
-                                }}
-                                renderTags={(value, getTagProps) =>
-                                    value.map((option, index) => (
-                                        <Chip
-                                            label={option}
-                                            {...getTagProps({ index })}
-                                            color="info"
-                                            variant="outlined"
-                                        />
-                                    ))
-                                }
-                                renderInput={(params) => (
-                                    <TextField
-                                        {...params}
-                                        label="Watchers"
-                                        placeholder="Add watchers"
-                                    />
-                                )}
-                            />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <TextField
-                                fullWidth
-                                type="date"
-                                label="Due Date"
-                                name="dueDate"
-                                value={formData.dueDate}
-                                onChange={handleChange}
-                                InputLabelProps={{ shrink: true }}
-                            />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-                                <Button
-                                    variant="outlined"
-                                    onClick={() => navigate('/issues')}
-                                    disabled={loading}
-                                >
-                                    Cancel
-                                </Button>
+                            <Box sx={{ mt: 2 }}>
                                 <Button
                                     type="submit"
                                     variant="contained"
+                                    color="primary"
                                     disabled={loading}
+                                    fullWidth
                                 >
                                     {loading ? <CircularProgress size={24} /> : 'Create Issue'}
                                 </Button>
@@ -513,22 +373,6 @@ const AddIssue = () => {
                     </Grid>
                 </form>
             </Box>
-            <Snackbar
-                open={!!error || !!success}
-                autoHideDuration={6000}
-                onClose={() => {
-                    setError('');
-                    setSuccess('');
-                }}
-            >
-                <Alert
-                    severity={error ? 'error' : 'success'}
-                    variant="filled"
-                    sx={{ width: '100%' }}
-                >
-                    {error || success}
-                </Alert>
-            </Snackbar>
         </Container>
     );
 };

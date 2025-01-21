@@ -10,7 +10,6 @@ import {
     Avatar,
     Badge,
     Typography,
-    Tooltip,
     List,
     ListItem,
     ListItemText,
@@ -32,7 +31,6 @@ import {
     Delete,
     AutoStories,
     Analytics,
-    Chat,
     Assessment,
     CloudDownload,
 } from '@mui/icons-material';
@@ -40,6 +38,7 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import {logout} from "../login/Login";
 import { format } from 'date-fns';
+import logo from '../assets/logo.svg';
 
 const Menu = ({ darkMode, toggleDarkMode }) => {
     const navigate = useNavigate();
@@ -48,6 +47,7 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
     const [notifications, setNotifications] = useState([]);
     const socket = React.useRef(null);
     const [analyticsMenuAnchor, setAnalyticsMenuAnchor] = useState(null);
+    const [projectType, setProjectType] = useState(localStorage.getItem('projectType'));
 
     useEffect(() => {
         socket.current = io('http://localhost:3001');
@@ -83,10 +83,27 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
             });
         });
 
+        const handleStorageChange = (e) => {
+            if (e.key === 'projectType') {
+                setProjectType(e.newValue);
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+
+        const interval = setInterval(() => {
+            const currentType = localStorage.getItem('projectType');
+            if (currentType !== projectType) {
+                setProjectType(currentType);
+            }
+        }, 1000);
+
         return () => {
             socket.current.disconnect();
+            window.removeEventListener('storage', handleStorageChange);
+            clearInterval(interval);
         };
-    }, []);
+    }, [projectType]);
 
     const handleNewNotification = (notification) => {
         setNotifications(prev => [notification, ...prev].slice(0, 10));
@@ -127,10 +144,11 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
         { label: 'Home', path: '/', icon: <Home /> },
         { label: 'Projects', path: '/projects', icon: <Dashboard /> },
         { label: 'Teams', path: '/team', icon: <Group /> },
-        { label: 'Sprints', path: '/sprints', icon: <Assignment /> },
+        ...(projectType !== 'Kanban' ? [
+            { label: 'Backlog', path: '/backlog', icon: <AutoStories /> },
+            { label: 'Sprints', path: '/sprints', icon: <Assignment /> },
+        ] : []),
         { label: 'Issues', path: '/issues', icon: <BugReport /> },
-        { label: 'Backlog', path: '/backlog', icon: <BugReport /> },
-        { label: 'Epics', path: '/epics', icon: <AutoStories /> },
         { 
             label: 'Analytics', 
             path: '/analytics', 
@@ -150,7 +168,44 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
 
     return (
         <AppBar position="static">
-            <Toolbar>
+            <Toolbar sx={{ minHeight: '64px !important', px: 2 }}>
+                <Box 
+                    sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        mr: 4,
+                        '&:hover': {
+                            opacity: 0.9
+                        }
+                    }}
+                    onClick={() => navigate('/')}
+                >
+                    <Box 
+                        component="img"
+                        src={logo}
+                        alt="Logo"
+                        sx={{ 
+                            height: 32,
+                            width: 'auto',
+                            mr: 1.5
+                        }}
+                    />
+                    <Typography
+                        variant="h6"
+                        sx={{ 
+                            color: '#fff',
+                            fontWeight: 600,
+                            letterSpacing: '0.5px',
+                            fontSize: '1.25rem',
+                            userSelect: 'none',
+                            lineHeight: 1
+                        }}
+                    >
+                        TaskFlow
+                    </Typography>
+                </Box>
+
                 <Box sx={{ flexGrow: 1, display: 'flex', gap: 2 }}>
                     {menuItems.map((item) => (
                         item.subItems ? (
@@ -218,100 +273,76 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
                     ))}
                 </Box>
 
-                <Tooltip title="Notifications">
-                    <IconButton color="inherit" onClick={handleNotificationClick}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <IconButton
+                        color="inherit"
+                        onClick={handleNotificationClick}
+                        sx={{ position: 'relative' }}
+                    >
                         <Badge badgeContent={notifications.length} color="error">
                             <Notifications />
                         </Badge>
                     </IconButton>
-                </Tooltip>
 
-                <Popover
-                    open={Boolean(notificationAnchorEl)}
-                    anchorEl={notificationAnchorEl}
-                    onClose={handleNotificationClose}
-                    anchorOrigin={{
-                        vertical: 'bottom',
-                        horizontal: 'right',
-                    }}
-                    transformOrigin={{
-                        vertical: 'top',
-                        horizontal: 'right',
-                    }}
-                    PaperProps={{
-                        sx: { 
-                            width: '350px',
-                            maxHeight: '400px',
-                            overflow: 'auto'
-                        }
-                    }}
-                >
-                    <Typography variant="h6" sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                        Notifications
-                    </Typography>
-                    {notifications.length === 0 ? (
-                        <Box sx={{ p: 2, textAlign: 'center' }}>
-                            <Typography color="text.secondary">No notifications</Typography>
-                        </Box>
-                    ) : (
-                        <List>
-                            {notifications.map((notification, index) => (
-                                <ListItem 
-                                    key={index}
-                                    button
-                                    onClick={() => handleNotificationItemClick(notification)}
-                                    sx={{
-                                        borderBottom: 1,
-                                        borderColor: 'divider',
-                                        '&:hover': {
-                                            backgroundColor: 'action.hover',
-                                        },
-                                    }}
-                                >
-                                    <ListItemIcon>
-                                        {notification.icon}
-                                    </ListItemIcon>
-                                    <ListItemText 
-                                        primary={notification.message}
-                                        secondary={format(notification.timestamp, 'MMM dd, yyyy HH:mm')}
-                                    />
+                    <Popover
+                        open={Boolean(notificationAnchorEl)}
+                        anchorEl={notificationAnchorEl}
+                        onClose={handleNotificationClose}
+                        anchorOrigin={{
+                            vertical: 'bottom',
+                            horizontal: 'right',
+                        }}
+                        transformOrigin={{
+                            vertical: 'top',
+                            horizontal: 'right',
+                        }}
+                    >
+                        <List sx={{ width: 300, maxHeight: 400, overflow: 'auto' }}>
+                            {notifications.length > 0 ? (
+                                notifications.map((notification, index) => (
+                                    <React.Fragment key={index}>
+                                        <ListItem
+                                            button
+                                            onClick={() => handleNotificationItemClick(notification)}
+                                        >
+                                            <ListItemIcon>{notification.icon}</ListItemIcon>
+                                            <ListItemText
+                                                primary={notification.message}
+                                                secondary={format(notification.timestamp, 'MMM d, yyyy HH:mm')}
+                                            />
+                                        </ListItem>
+                                        {index < notifications.length - 1 && <Divider />}
+                                    </React.Fragment>
+                                ))
+                            ) : (
+                                <ListItem>
+                                    <ListItemText primary="No new notifications" />
                                 </ListItem>
-                            ))}
+                            )}
                         </List>
-                    )}
-                </Popover>
+                    </Popover>
 
-                <Tooltip title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
                     <IconButton color="inherit" onClick={toggleDarkMode}>
                         {darkMode ? <Brightness7 /> : <Brightness4 />}
                     </IconButton>
-                </Tooltip>
 
-                <Tooltip title="Account Settings">
-                    <IconButton onClick={handleMenuOpen}>
-                        <Avatar alt="User Avatar" src="/path-to-avatar.jpg" />
+                    <IconButton
+                        onClick={handleMenuOpen}
+                        size="small"
+                        sx={{ ml: 2 }}
+                    >
+                        <Avatar sx={{ width: 32, height: 32 }}>U</Avatar>
                     </IconButton>
-                </Tooltip>
-                <MuiMenu
-                    anchorEl={anchorEl}
-                    open={Boolean(anchorEl)}
-                    onClose={handleMenuClose}
-                    PaperProps={{
-                        style: {
-                            width: '200px',
-                        },
-                    }}
-                >
-                    <MenuItem onClick={handleMenuClose}>
-                        <Typography variant="body1">Profile</Typography>
-                    </MenuItem>
-                    <MenuItem onClick={handleMenuClose}>
-                        <Typography variant="body1">Settings</Typography>
-                    </MenuItem>
-                    <MenuItem onClick={() => { handleLogout(); window.location.reload(); }}>
-                        <Typography variant="body1">Logout</Typography>
-                    </MenuItem>
-                </MuiMenu>
+
+                    <MuiMenu
+                        anchorEl={anchorEl}
+                        open={Boolean(anchorEl)}
+                        onClose={handleMenuClose}
+                        onClick={handleMenuClose}
+                    >
+                        <MenuItem onClick={handleLogout}>Logout</MenuItem>
+                    </MuiMenu>
+                </Box>
             </Toolbar>
         </AppBar>
     );

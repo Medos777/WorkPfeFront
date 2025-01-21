@@ -28,25 +28,33 @@ import {
     Paper,
     Slide,
     Collapse,
+    Menu,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import sprintService from '../service/SprintService';
 import projectService from '../service/ProjectService';
 import backlogItemService from '../service/BacklogItemService';
 
-// Styled Components for Enhanced UI
+// Styled Components
 const StyledAccordion = styled(Accordion)(({ theme }) => ({
     marginBottom: theme.spacing(2),
     boxShadow: theme.shadows[1],
-    borderRadius: theme.shape.borderRadius,
+    borderRadius: theme.shape.borderRadius + 'px !important',
     '&:before': {
-        display: 'none', // Remove the default border
+        display: 'none',
+    },
+    '&.Mui-expanded': {
+        margin: theme.spacing(2, 0),
     },
 }));
 
 const StyledAccordionSummary = styled(AccordionSummary)(({ theme }) => ({
-    backgroundColor: theme.palette.grey[100],
+    backgroundColor: theme.palette.background.paper,
+    borderRadius: theme.shape.borderRadius,
     '& .MuiAccordionSummary-content': {
         display: 'flex',
         alignItems: 'center',
@@ -54,26 +62,36 @@ const StyledAccordionSummary = styled(AccordionSummary)(({ theme }) => ({
         width: '100%',
     },
     '&:hover': {
-        backgroundColor: theme.palette.grey[200],
+        backgroundColor: theme.palette.grey[50],
     },
 }));
 
 const StyledAccordionDetails = styled(AccordionDetails)(({ theme }) => ({
     padding: theme.spacing(3),
-    borderTop: `1px solid ${theme.palette.divider}`,
+    backgroundColor: theme.palette.background.paper,
 }));
 
 const StyledChip = styled(Chip)(({ theme, status }) => ({
     fontWeight: 'bold',
-    ...(status === 'Active' && { backgroundColor: theme.palette.success.light, color: theme.palette.success.contrastText }),
-    ...(status === 'Completed' && { backgroundColor: theme.palette.grey[400], color: theme.palette.grey[900] }),
-    ...(status === 'Future' && { backgroundColor: theme.palette.warning.light, color: theme.palette.warning.contrastText }),
+    borderRadius: '16px',
+    ...(status === 'Active' && {
+        backgroundColor: theme.palette.success.light,
+        color: theme.palette.success.dark,
+    }),
+    ...(status === 'Completed' && {
+        backgroundColor: theme.palette.grey[200],
+        color: theme.palette.grey[700],
+    }),
+    ...(status === 'Future' && {
+        backgroundColor: theme.palette.info.light,
+        color: theme.palette.info.dark,
+    }),
 }));
 
-const StyledAddButton = styled(IconButton)(({ theme }) => ({
-    backgroundColor: theme.palette.primary.light,
+const ActionButton = styled(IconButton)(({ theme }) => ({
+    color: theme.palette.text.secondary,
     '&:hover': {
-        backgroundColor: theme.palette.primary.main,
+        color: theme.palette.primary.main,
     },
 }));
 
@@ -84,8 +102,11 @@ const SprintList = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [addDialogOpen, setAddDialogOpen] = useState(false);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [addBacklogItemDialogOpen, setAddBacklogItemDialogOpen] = useState(false);
     const [selectedSprint, setSelectedSprint] = useState(null);
+    const [anchorEl, setAnchorEl] = useState(null);
     const [newSprint, setNewSprint] = useState({
         sprintName: '',
         startDate: '',
@@ -96,7 +117,7 @@ const SprintList = () => {
     });
     const [selectedBacklogItems, setSelectedBacklogItems] = useState([]);
 
-    // Fetch data using useCallback for memoization
+    // Fetch data
     const fetchData = useCallback(async () => {
         try {
             setLoading(true);
@@ -109,7 +130,7 @@ const SprintList = () => {
             setProjects(projectsResponse?.data || []);
             setAllBacklogItems(backlogItemsResponse?.data || []);
         } catch (err) {
-            setError('Failed to fetch data. Please check your server or network connection.');
+            setError('Failed to fetch data. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -119,9 +140,59 @@ const SprintList = () => {
         fetchData();
     }, [fetchData]);
 
+    const handleMenuOpen = (event, sprint) => {
+        setAnchorEl(event.currentTarget);
+        setSelectedSprint(sprint);
+    };
+
+    const handleMenuClose = () => {
+        setAnchorEl(null);
+    };
+
+    const handleEditClick = () => {
+        setNewSprint({
+            sprintName: selectedSprint.sprintName,
+            startDate: selectedSprint.startDate.split('T')[0],
+            endDate: selectedSprint.endDate.split('T')[0],
+            goal: selectedSprint.goal,
+            capacity: selectedSprint.capacity,
+            project: selectedSprint.project._id,
+        });
+        setEditDialogOpen(true);
+        handleMenuClose();
+    };
+
+    const handleDeleteClick = () => {
+        setDeleteDialogOpen(true);
+        handleMenuClose();
+    };
+
+    const handleEdit = async () => {
+        try {
+            await sprintService.update(selectedSprint._id, newSprint);
+            setEditDialogOpen(false);
+            setSelectedSprint(null);
+            fetchData();
+        } catch (err) {
+            setError('Failed to update sprint. Please try again.');
+        }
+    };
+
+    const handleDelete = async () => {
+        try {
+            await sprintService.deleteSprint(selectedSprint._id);
+            setDeleteDialogOpen(false);
+            setSelectedSprint(null);
+            fetchData();
+        } catch (err) {
+            setError('Failed to delete sprint. Please try again.');
+        }
+    };
+
+    // Existing handlers
     const handleAddSprint = async () => {
         if (!newSprint.sprintName || !newSprint.startDate || !newSprint.endDate || !newSprint.project) {
-            setError('All fields except "goal" and "capacity" are required.');
+            setError('Please fill in all required fields.');
             return;
         }
         try {
@@ -154,13 +225,9 @@ const SprintList = () => {
         const startDate = new Date(sprint.startDate);
         const endDate = new Date(sprint.endDate);
 
-        if (today < startDate) {
-            return 'Future';
-        } else if (today > endDate) {
-            return 'Completed';
-        } else {
-            return 'Active';
-        }
+        if (today < startDate) return 'Future';
+        if (today > endDate) return 'Completed';
+        return 'Active';
     };
 
     const handleOpenAddBacklogItemDialog = (sprint) => {
@@ -205,14 +272,31 @@ const SprintList = () => {
     return (
         <Box sx={{ p: 3 }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#333' }}>Sprint Management</Typography>
+                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#333' }}>
+                    Sprint Management
+                </Typography>
                 <Tooltip title="Add New Sprint">
-                    <StyledAddButton color="primary" onClick={() => setAddDialogOpen(true)}>
+                    <IconButton
+                        color="primary"
+                        onClick={() => setAddDialogOpen(true)}
+                        sx={{
+                            backgroundColor: (theme) => theme.palette.primary.light,
+                            '&:hover': {
+                                backgroundColor: (theme) => theme.palette.primary.main,
+                            },
+                        }}
+                    >
                         <AddIcon />
-                    </StyledAddButton>
+                    </IconButton>
                 </Tooltip>
             </Box>
-            {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
+
+            {error && (
+                <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
+                    {error}
+                </Alert>
+            )}
+
             {loading ? (
                 <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
                     <CircularProgress />
@@ -220,67 +304,166 @@ const SprintList = () => {
             ) : (
                 sprints.map((sprint) => (
                     <StyledAccordion key={sprint._id}>
-                        <StyledAccordionSummary
-                            expandIcon={<ExpandMoreIcon />}
-                        >
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                <Typography variant="h6" sx={{ fontWeight: 'bold', mr: 2 }}>{sprint.sprintName}</Typography>
-                                <Typography variant="body2" sx={{ color: '#757575', mr: 2 }}>
+                        <StyledAccordionSummary expandIcon={<ExpandMoreIcon />}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+                                <Typography variant="h6" sx={{ fontWeight: 'bold', mr: 2 }}>
+                                    {sprint.sprintName}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'text.secondary', mr: 2 }}>
                                     {`${formatDate(sprint.startDate)} - ${formatDate(sprint.endDate)}`}
                                 </Typography>
+                                <StyledChip
+                                    label={getSprintStatus(sprint)}
+                                    status={getSprintStatus(sprint)}
+                                    size="small"
+                                />
                             </Box>
-                            <StyledChip label={getSprintStatus(sprint)} status={getSprintStatus(sprint)} />
+                            <ActionButton
+                                size="small"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMenuOpen(e, sprint);
+                                }}
+                            >
+                                <MoreVertIcon />
+                            </ActionButton>
                         </StyledAccordionSummary>
                         <StyledAccordionDetails>
-                            <Typography variant="body2" gutterBottom>
-                                <strong>Goal:</strong> {sprint.goal || 'No goal set'}
-                            </Typography>
-                            <Typography variant="body2" gutterBottom>
-                                <strong>Capacity:</strong> {sprint.capacity || 'Not defined'}
-                            </Typography>
-                            <Typography variant="body2" gutterBottom>
-                                <strong>Project:</strong> {sprint.project?.projectName || 'No project assigned'}
-                            </Typography>
-                            <Button
-                                variant="outlined"
-                                onClick={() => handleOpenAddBacklogItemDialog(sprint)}
-                                sx={{ mt: 2 }}
-                            >
-                                Add Backlog Items
-                            </Button>
-                            <Collapse in={sprint.backlogItems?.length > 0} sx={{ mt: 2 }}>
-                                <Grid container spacing={2}>
-                                    {sprint.backlogItems?.map((item) => (
-                                        <Grid item xs={12} sm={6} md={4} key={item._id}>
-                                            <Paper elevation={2} sx={{ p: 2, textAlign: 'center', borderRadius: 1 }}>
-                                                <Typography variant="subtitle1" gutterBottom>
-                                                    {item.title}
-                                                </Typography>
-                                                <Chip
-                                                    label={`Status: ${item.status}`}
-                                                    color={
-                                                        item.status === 'done'
-                                                            ? 'success'
-                                                            : item.status === 'in-progress'
-                                                                ? 'warning'
-                                                                : 'default'
-                                                    }
-                                                    sx={{ mt: 1 }}
-                                                />
-                                            </Paper>
-                                        </Grid>
-                                    ))}
+                            <Grid container spacing={3}>
+                                <Grid item xs={12}>
+                                    <Typography variant="subtitle1" gutterBottom>
+                                        <strong>Goal:</strong> {sprint.goal || 'No goal set'}
+                                    </Typography>
+                                    <Typography variant="subtitle1" gutterBottom>
+                                        <strong>Capacity:</strong> {sprint.capacity || 'Not defined'}
+                                    </Typography>
+                                    <Typography variant="subtitle1" gutterBottom>
+                                        <strong>Project:</strong> {sprint.project?.projectName}
+                                    </Typography>
                                 </Grid>
-                            </Collapse>
-                            <Collapse in={!sprint.backlogItems?.length > 0} sx={{ mt: 2 }}>
-                                <Typography variant="body2" color="textSecondary">
-                                    No backlog items assigned to this sprint.
-                                </Typography>
-                            </Collapse>
+                                <Grid item xs={12}>
+                                    <Button
+                                        variant="outlined"
+                                        onClick={() => handleOpenAddBacklogItemDialog(sprint)}
+                                        sx={{ mt: 2 }}
+                                    >
+                                        Manage Backlog Items
+                                    </Button>
+                                </Grid>
+                            </Grid>
                         </StyledAccordionDetails>
                     </StyledAccordion>
                 ))
             )}
+
+            {/* Sprint Actions Menu */}
+            <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleMenuClose}
+                anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'right',
+                }}
+                transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                }}
+            >
+                <MenuItem onClick={handleEditClick}>
+                    <EditIcon sx={{ mr: 1 }} fontSize="small" />
+                    Edit Sprint
+                </MenuItem>
+                <MenuItem onClick={handleDeleteClick} sx={{ color: 'error.main' }}>
+                    <DeleteIcon sx={{ mr: 1 }} fontSize="small" />
+                    Delete Sprint
+                </MenuItem>
+            </Menu>
+
+            {/* Edit Sprint Dialog */}
+            <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Edit Sprint</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        label="Sprint Name"
+                        value={newSprint.sprintName}
+                        onChange={(e) => setNewSprint({ ...newSprint, sprintName: e.target.value })}
+                        fullWidth
+                        margin="normal"
+                        required
+                    />
+                    <TextField
+                        label="Start Date"
+                        type="date"
+                        value={newSprint.startDate}
+                        onChange={(e) => setNewSprint({ ...newSprint, startDate: e.target.value })}
+                        fullWidth
+                        margin="normal"
+                        InputLabelProps={{ shrink: true }}
+                        required
+                    />
+                    <TextField
+                        label="End Date"
+                        type="date"
+                        value={newSprint.endDate}
+                        onChange={(e) => setNewSprint({ ...newSprint, endDate: e.target.value })}
+                        fullWidth
+                        margin="normal"
+                        InputLabelProps={{ shrink: true }}
+                        required
+                    />
+                    <TextField
+                        label="Goal"
+                        value={newSprint.goal}
+                        onChange={(e) => setNewSprint({ ...newSprint, goal: e.target.value })}
+                        fullWidth
+                        margin="normal"
+                    />
+                    <TextField
+                        label="Capacity"
+                        type="number"
+                        value={newSprint.capacity}
+                        onChange={(e) => setNewSprint({ ...newSprint, capacity: e.target.value })}
+                        fullWidth
+                        margin="normal"
+                    />
+                    <FormControl fullWidth margin="normal" required>
+                        <InputLabel>Project</InputLabel>
+                        <Select
+                            value={newSprint.project}
+                            onChange={(e) => setNewSprint({ ...newSprint, project: e.target.value })}
+                        >
+                            {projects.map((project) => (
+                                <MenuItem key={project._id} value={project._id}>
+                                    {project.projectName}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+                    <Button variant="contained" onClick={handleEdit}>
+                        Save Changes
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+                <DialogTitle>Delete Sprint</DialogTitle>
+                <DialogContent>
+                    <Typography>
+                        Are you sure you want to delete this sprint? This action cannot be undone.
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+                    <Button variant="contained" color="error" onClick={handleDelete}>
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             {/* Add Sprint Dialog */}
             <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
@@ -351,7 +534,7 @@ const SprintList = () => {
                 </DialogActions>
             </Dialog>
 
-            {/* Add Backlog Item to Sprint Dialog */}
+            {/* Add Backlog Items Dialog */}
             <Dialog
                 open={addBacklogItemDialogOpen}
                 onClose={handleCloseAddBacklogItemDialog}
@@ -360,23 +543,46 @@ const SprintList = () => {
             >
                 <DialogTitle>Add Backlog Items to Sprint</DialogTitle>
                 <DialogContent>
-                    <List>
-                        {filteredBacklogItems.map((item) => (
-                            <ListItem
-                                key={item._id}
-                                button
-                                onClick={() => handleToggleBacklogItem(item._id)}
-                                selected={selectedBacklogItems.includes(item._id)}
-                            >
-                                <ListItemText primary={item.title} />
-                            </ListItem>
-                        ))}
-                    </List>
+                    {filteredBacklogItems.length > 0 ? (
+                        <List>
+                            {filteredBacklogItems.map((item) => (
+                                <ListItem
+                                    key={item._id}
+                                    button
+                                    onClick={() => handleToggleBacklogItem(item._id)}
+                                    selected={selectedBacklogItems.includes(item._id)}
+                                    sx={{
+                                        borderRadius: 1,
+                                        mb: 1,
+                                        '&.Mui-selected': {
+                                            backgroundColor: (theme) => theme.palette.primary.light,
+                                        },
+                                        '&.Mui-selected:hover': {
+                                            backgroundColor: (theme) => theme.palette.primary.light,
+                                        },
+                                    }}
+                                >
+                                    <ListItemText
+                                        primary={item.title}
+                                        secondary={`Status: ${item.status}`}
+                                    />
+                                </ListItem>
+                            ))}
+                        </List>
+                    ) : (
+                        <Typography color="textSecondary">
+                            No available backlog items for this project.
+                        </Typography>
+                    )}
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleCloseAddBacklogItemDialog}>Cancel</Button>
-                    <Button variant="contained" onClick={handleAddBacklogItemsToSprint}>
-                        Add Items
+                    <Button
+                        variant="contained"
+                        onClick={handleAddBacklogItemsToSprint}
+                        disabled={!selectedBacklogItems.length}
+                    >
+                        Add Selected Items
                     </Button>
                 </DialogActions>
             </Dialog>

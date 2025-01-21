@@ -1,9 +1,207 @@
 .text-success {
-    color: #28a745; /* Green for upcoming */
+    color: #4caf50; /* Green for active */
 }
+
 .text-warning {
-    color: #ffc107; /* Yellow for ongoing */
+    color: #ff9800; /* Orange for on hold */
 }
+
+.text-danger {
+    color: #f44336; /* Red for cancelled */
+}
+
 .text-secondary {
-    color: #6c757d; /* Grey for completed/past */
+    color: #6c757d; /* Grey for completed */
+}
+
+.project-card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    border: none;
+}
+
+.project-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+}
+
+.project-description {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    height: 4.5em;
+}
+
+.project-info {
+    margin-top: 1.5rem;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    color: #6c757d;
+}
+
+.info-icon {
+    margin-right: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.info-text {
+    font-size: 0.9rem;
+}
+
+.status-chip {
+    font-size: 0.75rem;
+}
+
+.project-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Table Styles */
+.table-container {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.table-header {
+    background-color: #f8f9fa;
+}
+
+.table-row {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.table-row:hover {
+    background-color: rgba(25, 118, 210, 0.04);
+}
+
+/* Action Button Colors */
+.analytics-button {
+    color: #2196f3 !important;
+}
+
+.analytics-button:hover {
+    background-color: rgba(33, 150, 243, 0.04) !important;
+}
+
+.timeline-button {
+    color: #9c27b0 !important;
+}
+
+.timeline-button:hover {
+    background-color: rgba(156, 39, 176, 0.04) !important;
+}
+
+.edit-button {
+    color: #00bcd4 !important;
+}
+
+.edit-button:hover {
+    background-color: rgba(0, 188, 212, 0.04) !important;
+}
+
+.delete-button {
+    color: #f44336 !important;
+}
+
+.delete-button:hover {
+    background-color: rgba(244, 67, 54, 0.04) !important;
+}
+
+/* Filter Accordion */
+.filter-accordion {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+    border-radius: 0.5rem !important;
+    margin-bottom: 1.5rem;
+}
+
+.filter-accordion::before {
+    display: none;
+}
+
+/* Project Details Dialog */
+.project-details {
+    padding: 1rem 0;
+}
+
+.detail-section {
+    margin-bottom: 2rem;
+}
+
+.detail-section:last-child {
+    margin-bottom: 0;
+}
+
+/* Input Group */
+.input-group {
+    max-width: 300px;
+}
+
+.input-group .form-control {
+    height: 38px;
+    font-size: 0.9rem;
+}
+
+.input-group-text {
+    background-color: transparent;
+    border-right: none;
+}
+
+.form-control:focus {
+    border-color: #1976d2;
+    box-shadow: none;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .input-group {
+        max-width: 100%;
+    }
+}
+
+.view-toggle .MuiButton-root {
+    text-transform: none;
+    min-width: 100px;
+}
+
+.view-toggle .active {
+    background-color: #1976d2;
+    color: white;
+}
+
+.view-toggle .active:hover {
+    background-color: #1565c0;
+}
+
+.table-responsive {
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.table > :not(caption) > * > * {
+    padding: 1rem;
+}
+
+.input-group {
+    box-shadow: 0 .125rem .25rem rgba(0,0,0,.075);
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.input-group-text {
+    border: 1px solid #dee2e6;
+}
+
+.action-button {
+    color: #1976d2;
+}
+
+.action-button:hover {
+    background-color: rgba(25, 118, 210, 0.04);
 }
