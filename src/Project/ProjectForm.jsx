@@ -15,19 +15,53 @@ import {
     Snackbar,
     Tooltip,
     Grid,
-    Paper
+    Paper,
+    Stepper,
+    Step,
+    StepLabel,
+    StepButton,
+    Slide,
+    Fade,
+    styled
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import TeamService from '../service/TeamService';
 import UserService from '../service/UserService';
 import ProjectService from '../service/ProjectService';
-import { SmartToy } from '@mui/icons-material';
+import { SmartToy, NavigateNext, NavigateBefore } from '@mui/icons-material';
 
-const ProjectForm = forwardRef(({ isEdit = false, projectData = null, onSubmit, onAiClick }, ref) => {
+const StyledStepLabel = styled(StepLabel)(({ theme }) => ({
+    '& .MuiStepLabel-label': {
+        color: theme.palette.text.secondary,
+        '&.Mui-active': {
+            color: theme.palette.primary.main,
+            fontWeight: 600
+        },
+        '&.Mui-completed': {
+            color: theme.palette.success.main
+        }
+    }
+}));
+
+const FormSlide = ({ in: inProp, direction = 'left', children }) => (
+    <Slide direction={direction} in={inProp} mountOnEnter unmountOnExit>
+        <Fade in={inProp}>
+            <div>{children}</div>
+        </Fade>
+    </Slide>
+);
+
+const steps = [
+    'Basic Information',
+    'Team & Leadership',
+    'Timeline & Budget'
+];
+
+const ProjectForm = forwardRef(({ isEdit = false, projectData = null, onSubmit, onAiClick, initialProjectType }, ref) => {
     const [formData, setFormData] = useState({
         projectName: '',
         projectDescription: '',
-        projectType: '',
+        projectType: initialProjectType || '',
         projectKey: '',
         startDate: '',
         endDate: '',
@@ -135,14 +169,30 @@ const ProjectForm = forwardRef(({ isEdit = false, projectData = null, onSubmit, 
     };
 
     const handleNext = () => {
+        const validationError = validateForm();
+        if (validationError) {
+            setError(validationError);
+            return;
+        }
         if (currentSlide < 2) {
             setCurrentSlide(currentSlide + 1);
         }
     };
 
     const handlePrevious = () => {
+        setError('');
         if (currentSlide > 0) {
             setCurrentSlide(currentSlide - 1);
+        }
+    };
+
+    const handleStepClick = (step) => {
+        const validationError = validateForm();
+        if (!validationError || step < currentSlide) {
+            setCurrentSlide(step);
+            setError('');
+        } else {
+            setError(validationError);
         }
     };
 
@@ -199,323 +249,260 @@ const ProjectForm = forwardRef(({ isEdit = false, projectData = null, onSubmit, 
     }
 
     return (
-        <Box
-            sx={{
-                minHeight: '100vh',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
-                padding: { xs: 2, sm: 4, md: 6 },
-                pt: { xs: 4, sm: 6, md: 8 },
-            }}
-        >
+        <Box sx={{ width: '100%', mb: 4 }}>
             <Container component="main" maxWidth="md">
                 <Paper
                     elevation={6}
                     sx={{
                         p: { xs: 2, sm: 4 },
-                        display: 'flex',
-                        flexDirection: 'column',
-                        background: 'rgba(255, 255, 255, 0.95)',
+                        mt: 3,
                         borderRadius: 2,
-                        boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
-                        backdropFilter: 'blur(4px)',
+                        position: 'relative',
+                        overflow: 'hidden'
                     }}
                 >
+                    <Stepper 
+                        activeStep={currentSlide} 
+                        alternativeLabel 
+                        nonLinear
+                        sx={{ 
+                            mb: 4,
+                            '& .MuiStepConnector-line': {
+                                borderColor: 'rgba(0, 0, 0, 0.12)'
+                            }
+                        }}
+                    >
+                        {steps.map((label, index) => (
+                            <Step key={label} completed={index < currentSlide}>
+                                <StepButton onClick={() => handleStepClick(index)}>
+                                    <StyledStepLabel>{label}</StyledStepLabel>
+                                </StepButton>
+                            </Step>
+                        ))}
+                    </Stepper>
+
+                    {error && (
+                        <Fade in={!!error}>
+                            <Alert 
+                                severity="error" 
+                                sx={{ mb: 3 }} 
+                                onClose={() => setError('')}
+                            >
+                                {error}
+                            </Alert>
+                        </Fade>
+                    )}
+
                     <Box component="form" onSubmit={handleSubmit}>
-                        <Grid container spacing={3}>
-                            {currentSlide === 0 && (
-                                <>
-                                    <Grid item xs={12}>
-                                        <TextField
+                        <FormSlide in={currentSlide === 0} direction="left">
+                            <Grid container spacing={3} sx={{ display: currentSlide === 0 ? 'flex' : 'none' }}>
+                                <Grid item xs={12}>
+                                    <TextField
+                                        required
+                                        fullWidth
+                                        id="projectName"
+                                        name="projectName"
+                                        label="Project Name"
+                                        value={formData.projectName}
+                                        onChange={handleChange}
+                                        autoFocus
+                                    />
+                                </Grid>
+                                <Grid item xs={12}>
+                                    <TextField
+                                        required
+                                        fullWidth
+                                        multiline
+                                        rows={4}
+                                        id="projectDescription"
+                                        name="projectDescription"
+                                        label="Project Description"
+                                        value={formData.projectDescription}
+                                        onChange={handleChange}
+                                    />
+                                </Grid>
+                                <Grid item xs={12}>
+                                    <TextField
+                                        fullWidth
+                                        id="projectKey"
+                                        name="projectKey"
+                                        label="Project Key"
+                                        value={formData.projectKey}
+                                        disabled
+                                        helperText="Auto-generated from Project Name and Start Date"
+                                    />
+                                </Grid>
+                            </Grid>
+                        </FormSlide>
+
+                        <FormSlide in={currentSlide === 1} direction={currentSlide > 1 ? 'left' : 'right'}>
+                            <Grid container spacing={3} sx={{ display: currentSlide === 1 ? 'flex' : 'none' }}>
+                                <Grid item xs={12}>
+                                    <FormControl fullWidth>
+                                        <InputLabel id="projectLead-label">Project Lead</InputLabel>
+                                        <Select
                                             required
-                                            fullWidth
-                                            id="projectName"
-                                            label="Project Name"
-                                            name="projectName"
-                                            value={formData.projectName}
+                                            labelId="projectLead-label"
+                                            id="projectLead"
+                                            name="projectLead"
+                                            value={formData.projectLead}
                                             onChange={handleChange}
-                                            variant="outlined"
-                                            sx={{
-                                                '& .MuiOutlinedInput-root': {
-                                                    '&:hover fieldset': {
-                                                        borderColor: '#1976d2',
-                                                    },
-                                                },
-                                            }}
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12}>
-                                        <TextField
-                                            required
-                                            fullWidth
-                                            multiline
-                                            rows={4}
-                                            id="projectDescription"
-                                            label="Description"
-                                            name="projectDescription"
-                                            value={formData.projectDescription}
-                                            onChange={handleChange}
-                                            variant="outlined"
-                                            sx={{
-                                                '& .MuiOutlinedInput-root': {
-                                                    '&:hover fieldset': {
-                                                        borderColor: '#1976d2',
-                                                    },
-                                                },
-                                            }}
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12}>
-                                        <FormControl 
-                                            fullWidth
-                                            required
-                                            sx={{
-                                                '& .MuiOutlinedInput-root': {
-                                                    '&:hover fieldset': {
-                                                        borderColor: '#1976d2',
-                                                    },
-                                                },
-                                            }}
+                                            label="Project Lead"
                                         >
-                                            <InputLabel id="projectType-label">Project Type</InputLabel>
-                                            <Select
-                                                labelId="projectType-label"
-                                                id="projectType"
-                                                name="projectType"
-                                                value={formData.projectType}
-                                                onChange={handleChange}
-                                                label="Project Type"
-                                            >
-                                                <MenuItem value="Scrum">Scrum</MenuItem>
-                                                <MenuItem value="Kanban">Kanban</MenuItem>
-                                                <MenuItem value="simple">Simple</MenuItem>
-                                            </Select>
-                                        </FormControl>
-                                    </Grid>
-                                    <Grid item xs={12}>
-                                        <TextField
-                                            fullWidth
-                                            id="projectKey"
-                                            label="Project Key"
-                                            name="projectKey"
-                                            value={formData.projectKey}
-                                            disabled
-                                            variant="outlined"
-                                            helperText="Auto-generated from Project Name and Start Date"
-                                            sx={{
-                                                '& .MuiOutlinedInput-root': {
-                                                    '&:hover fieldset': {
-                                                        borderColor: '#1976d2',
-                                                    },
-                                                },
-                                            }}
-                                        />
-                                    </Grid>
-                                </>
-                            )}
-                            {currentSlide === 1 && (
-                                <>
-                                    <Grid item xs={12}>
-                                        <FormControl 
-                                            fullWidth
-                                            sx={{
-                                                '& .MuiOutlinedInput-root': {
-                                                    '&:hover fieldset': {
-                                                        borderColor: '#1976d2',
-                                                    },
-                                                },
-                                            }}
+                                            {users.map((user) => (
+                                                <MenuItem key={user._id} value={user._id}>
+                                                    {user.name}
+                                                </MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                                <Grid item xs={12}>
+                                    <FormControl fullWidth>
+                                        <InputLabel id="teams-label">Teams</InputLabel>
+                                        <Select
+                                            labelId="teams-label"
+                                            id="teams"
+                                            multiple
+                                            value={formData.teams}
+                                            onChange={handleTeamChange}
+                                            label="Teams"
                                         >
-                                            <InputLabel id="projectLead-label">Project Lead</InputLabel>
-                                            <Select
-                                                labelId="projectLead-label"
-                                                id="projectLead"
-                                                name="projectLead"
-                                                value={formData.projectLead}
-                                                onChange={handleChange}
-                                                label="Project Lead"
-                                                required
-                                            >
-                                                {users.map((user) => (
-                                                    <MenuItem key={user._id} value={user._id}>
-                                                        {user.username}
-                                                    </MenuItem>
-                                                ))}
-                                            </Select>
-                                        </FormControl>
-                                    </Grid>
-                                    <Grid item xs={12}>
-                                        <FormControl 
-                                            fullWidth
-                                            sx={{
-                                                '& .MuiOutlinedInput-root': {
-                                                    '&:hover fieldset': {
-                                                        borderColor: '#1976d2',
-                                                    },
-                                                },
-                                            }}
-                                        >
-                                            <InputLabel id="teams-label">Select Teams</InputLabel>
-                                            <Select
-                                                labelId="teams-label"
-                                                id="teams"
-                                                multiple
-                                                value={formData.teams}
-                                                onChange={handleTeamChange}
-                                                label="Select Teams"
-                                            >
-                                                {teams.map((team) => (
-                                                    <MenuItem key={team._id} value={team._id}>
-                                                        {team.teamName}
-                                                    </MenuItem>
-                                                ))}
-                                            </Select>
-                                        </FormControl>
-                                    </Grid>
-                                </>
-                            )}
-                            {currentSlide === 2 && (
-                                <>
-                                    <Grid item xs={12} sm={6}>
-                                        <TextField
-                                            required
-                                            fullWidth
-                                            id="startDate"
-                                            label="Start Date"
-                                            name="startDate"
-                                            type="date"
-                                            value={formData.startDate}
-                                            onChange={handleChange}
-                                            InputLabelProps={{ shrink: true }}
-                                            variant="outlined"
-                                            sx={{
-                                                '& .MuiOutlinedInput-root': {
-                                                    '&:hover fieldset': {
-                                                        borderColor: '#1976d2',
-                                                    },
-                                                },
-                                            }}
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6}>
-                                        <TextField
-                                            required
-                                            fullWidth
-                                            id="endDate"
-                                            label="End Date"
-                                            name="endDate"
-                                            type="date"
-                                            value={formData.endDate}
-                                            onChange={handleChange}
-                                            InputLabelProps={{ shrink: true }}
-                                            variant="outlined"
-                                            sx={{
-                                                '& .MuiOutlinedInput-root': {
-                                                    '&:hover fieldset': {
-                                                        borderColor: '#1976d2',
-                                                    },
-                                                },
-                                            }}
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6}>
-                                        <TextField
-                                            fullWidth
-                                            id="budget"
-                                            label="Budget"
-                                            name="budget"
-                                            value={formData.budget}
-                                            onChange={handleChange}
-                                            InputProps={{
-                                                startAdornment: '€',
-                                            }}
-                                            variant="outlined"
-                                            sx={{
-                                                '& .MuiOutlinedInput-root': {
-                                                    '&:hover fieldset': {
-                                                        borderColor: '#1976d2',
-                                                    },
-                                                },
-                                            }}
-                                        />
-                                    </Grid>
-                                    <Grid item xs={12} sm={6}>
-                                        <TextField
-                                            fullWidth
-                                            id="costEstimate"
-                                            label="Cost Estimate"
-                                            name="costEstimate"
-                                            value={formData.costEstimate}
-                                            onChange={handleChange}
-                                            InputProps={{
-                                                startAdornment: '€',
-                                            }}
-                                            variant="outlined"
-                                            sx={{
-                                                '& .MuiOutlinedInput-root': {
-                                                    '&:hover fieldset': {
-                                                        borderColor: '#1976d2',
-                                                    },
-                                                },
-                                            }}
-                                        />
-                                    </Grid>
-                                </>
-                            )}
-                        </Grid>
-                        <Box display="flex" justifyContent="space-between" mt={3}>
+                                            {teams.map((team) => (
+                                                <MenuItem key={team._id} value={team._id}>
+                                                    {team.name}
+                                                </MenuItem>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+                                </Grid>
+                            </Grid>
+                        </FormSlide>
+
+                        <FormSlide in={currentSlide === 2} direction="right">
+                            <Grid container spacing={3} sx={{ display: currentSlide === 2 ? 'flex' : 'none' }}>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        required
+                                        fullWidth
+                                        id="startDate"
+                                        name="startDate"
+                                        label="Start Date"
+                                        type="date"
+                                        value={formData.startDate}
+                                        onChange={handleChange}
+                                        InputLabelProps={{
+                                            shrink: true,
+                                        }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        required
+                                        fullWidth
+                                        id="endDate"
+                                        name="endDate"
+                                        label="End Date"
+                                        type="date"
+                                        value={formData.endDate}
+                                        onChange={handleChange}
+                                        InputLabelProps={{
+                                            shrink: true,
+                                        }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        id="budget"
+                                        name="budget"
+                                        label="Budget"
+                                        type="number"
+                                        value={formData.budget}
+                                        onChange={handleChange}
+                                        InputProps={{
+                                            startAdornment: '$',
+                                        }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        id="costEstimate"
+                                        name="costEstimate"
+                                        label="Cost Estimate"
+                                        type="number"
+                                        value={formData.costEstimate}
+                                        onChange={handleChange}
+                                        InputProps={{
+                                            startAdornment: '$',
+                                        }}
+                                    />
+                                </Grid>
+                            </Grid>
+                        </FormSlide>
+
+                        <Box 
+                            display="flex" 
+                            justifyContent="space-between" 
+                            mt={4}
+                            sx={{
+                                '& .MuiButton-root': {
+                                    minWidth: 100
+                                }
+                            }}
+                        >
                             <Button
-                                variant="contained"
-                                disabled={currentSlide === 0}
+                                variant="outlined"
                                 onClick={handlePrevious}
+                                disabled={currentSlide === 0}
+                                startIcon={<NavigateBefore />}
                             >
-                                Previous
+                                Back
                             </Button>
-                            <Button
-                                variant="contained"
-                                type="submit"
-                            >
-                                {currentSlide === 2 ? 'Submit' : 'Next'}
-                            </Button>
+                            <Box>
+                                {onAiClick && (
+                                    <Tooltip title="Generate project details using AI">
+                                        <Button
+                                            onClick={onAiClick}
+                                            startIcon={<SmartToy />}
+                                            sx={{ mr: 2 }}
+                                        >
+                                            AI Assist
+                                        </Button>
+                                    </Tooltip>
+                                )}
+                                <Button
+                                    variant="contained"
+                                    onClick={currentSlide === 2 ? handleSubmit : handleNext}
+                                    endIcon={currentSlide < 2 ? <NavigateNext /> : null}
+                                    disabled={loading}
+                                >
+                                    {currentSlide === 2 ? (isEdit ? 'Update' : 'Create') : 'Next'}
+                                    {loading && <CircularProgress size={24} sx={{ ml: 1 }} />}
+                                </Button>
+                            </Box>
                         </Box>
                     </Box>
                 </Paper>
 
                 <Snackbar 
-                    open={!!error} 
+                    open={!!error || !!success} 
                     autoHideDuration={6000} 
-                    onClose={() => setError('')}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                    onClose={() => {
+                        setError('');
+                        setSuccess('');
+                    }}
                 >
                     <Alert 
-                        onClose={() => setError('')} 
-                        severity="error" 
-                        sx={{ 
-                            width: '100%',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                        }}
+                        onClose={() => {
+                            setError('');
+                            setSuccess('');
+                        }} 
+                        severity={error ? 'error' : 'success'} 
+                        sx={{ width: '100%' }}
                     >
-                        {error}
-                    </Alert>
-                </Snackbar>
-
-                <Snackbar 
-                    open={!!success} 
-                    autoHideDuration={6000} 
-                    onClose={() => setSuccess('')}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                >
-                    <Alert 
-                        onClose={() => setSuccess('')} 
-                        severity="success"
-                        sx={{ 
-                            width: '100%',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                        }}
-                    >
-                        {success}
+                        {error || success}
                     </Alert>
                 </Snackbar>
             </Container>

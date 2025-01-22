@@ -33,6 +33,16 @@ import {
     Analytics,
     Assessment,
     CloudDownload,
+    Flag,
+    BookmarkBorder,
+    Speed as SpeedIcon,
+    Timeline,
+    BugReportOutlined,
+    BarChart,
+    PeopleAlt,
+    AssessmentOutlined,
+    CloudDownloadOutlined,
+    FlagOutlined,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
@@ -146,19 +156,20 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
         { label: 'Teams', path: '/team', icon: <Group /> },
         ...(projectType !== 'Kanban' ? [
             { label: 'Backlog', path: '/backlog', icon: <AutoStories /> },
-            { label: 'Sprints', path: '/sprints', icon: <Assignment /> },
+            { label: 'Sprints', path: '/sprints', icon: <Timeline /> },
         ] : []),
-        { label: 'Issues', path: '/issues', icon: <BugReport /> },
+        { label: 'Issues', path: '/issues', icon: <BugReportOutlined /> },
         { 
             label: 'Analytics', 
             path: '/analytics', 
-            icon: <Analytics />,
+            icon: <BarChart />,
             subItems: [
-                { label: 'Project Analytics', path: '/projects/analytics', icon: <Assessment /> },
-                { label: 'Team Performance', path: '/teams/analytics', icon: <Group /> },
-                { label: 'Reports', path: '/reports', icon: <CloudDownload /> },
+                { label: 'Project Analytics', path: '/projects/analytics', icon: <AssessmentOutlined /> },
+                { label: 'Team Performance', path: '/teams/analytics', icon: <PeopleAlt /> },
+                { label: 'Reports', path: '/reports', icon: <CloudDownloadOutlined /> },
             ]
         },
+        { label: 'Epics', path: '/epics', icon: <FlagOutlined /> },
     ];
 
     const handleLogout = () => {
@@ -340,7 +351,30 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
                         onClose={handleMenuClose}
                         onClick={handleMenuClose}
                     >
-                        <MenuItem onClick={handleLogout}>Logout</MenuItem>
+                        <List>
+                            <ListItem button component={RouterLink} to="/dashboard">
+                                <ListItemIcon>
+                                    <Dashboard />
+                                </ListItemIcon>
+                                <ListItemText primary="Dashboard" />
+                            </ListItem>
+
+                            <ListItem button component={RouterLink} to="/epics">
+                                <ListItemIcon>
+                                    <Flag />
+                                </ListItemIcon>
+                                <ListItemText primary="Epics" />
+                            </ListItem>
+
+                            <ListItem button component={RouterLink} to="/add-epic">
+                                <ListItemIcon>
+                                    <BookmarkBorder />
+                                </ListItemIcon>
+                                <ListItemText primary="Create Epic" />
+                            </ListItem>
+
+                            <MenuItem onClick={handleLogout}>Logout</MenuItem>
+                        </List>
                     </MuiMenu>
                 </Box>
             </Toolbar>

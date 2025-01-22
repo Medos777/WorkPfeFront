@@ -16,8 +16,7 @@ const transformEpicData = (data) => {
     const transformed = {
         name: data.name?.trim(),
         description: data.description?.trim(),
-        project: data.projectId || data.project,
-        status: (data.status || 'to do').toLowerCase(),
+        status: data.status?.toLowerCase() || 'to do',
         priority: (data.priority || 'medium').toLowerCase(),
         startDate: data.startDate || undefined,
         dueDate: data.dueDate || undefined,
@@ -25,13 +24,20 @@ const transformEpicData = (data) => {
         watchers: data.watchers || []
     };
 
-    // Remove undefined/null values
+    // Handle project field separately to preserve null values
+    if (data.project !== undefined) {
+        transformed.project = data.project || null;
+    }
+
+    // Remove undefined values, but keep null values
     Object.keys(transformed).forEach(key => {
-        if (transformed[key] === undefined || transformed[key] === null) {
+        if (transformed[key] === undefined) {
             delete transformed[key];
         }
     });
 
+    console.log('Original epic data:', data);
+    console.log('Transformed epic data:', transformed);
     return transformed;
 };
 
@@ -42,6 +48,7 @@ const create = (epicData) => {
 
 const update = (epicId, epicData) => {
     const transformedData = transformEpicData(epicData);
+    console.log('Transformed update data:', transformedData); // Debug log
     return httpClient.put(`/epics/${epicId}`, transformedData);
 };
 

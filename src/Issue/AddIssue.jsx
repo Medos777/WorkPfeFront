@@ -14,9 +14,8 @@ import {
     Alert,
     Snackbar,
     Grid,
-    Chip,
-    Avatar,
-    Autocomplete,
+    Paper,
+    Divider,
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import IssueService from '../service/IssueService';
@@ -26,18 +25,24 @@ import UserService from '../service/UserService';
 import EpicService from '../service/EpicService';
 
 const issueTypes = [
-    { value: 'story', label: 'Story' },
-    { value: 'task', label: 'Task' },
-    { value: 'bug', label: 'Bug' },
-    { value: 'epic', label: 'Epic' }
+    { value: 'story', label: 'Story', color: '#36B37E' },
+    { value: 'task', label: 'Task', color: '#4FADE6' },
+    { value: 'bug', label: 'Bug', color: '#FF5630' },
+    { value: 'epic', label: 'Epic', color: '#904EE2' }
 ];
 
 const priorities = [
-    { value: 'highest', label: 'Highest' },
-    { value: 'high', label: 'High' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'low', label: 'Low' },
-    { value: 'lowest', label: 'Lowest' }
+    { value: 'highest', label: 'Highest', color: '#FF5630' },
+    { value: 'high', label: 'High', color: '#FF7452' },
+    { value: 'medium', label: 'Medium', color: '#FFAB00' },
+    { value: 'low', label: 'Low', color: '#36B37E' },
+    { value: 'lowest', label: 'Lowest', color: '#4FADE6' }
+];
+
+const statuses = [
+    { value: 'todo', label: 'To Do' },
+    { value: 'inprogress', label: 'In Progress' },
+    { value: 'done', label: 'Done' }
 ];
 
 const AddIssue = () => {
@@ -78,55 +83,65 @@ const AddIssue = () => {
         const fetchInitialData = async () => {
             try {
                 setLoading(true);
-                const projectsRes = await ProjectService.getAll();
-                const usersRes = await UserService.getAll();
+                const [projectsRes, usersRes] = await Promise.all([
+                    ProjectService.getAll(),
+                    UserService.getAll()
+                ]);
 
-                console.log('Raw Projects Response:', projectsRes);
-                console.log('Projects Data Structure:', projectsRes.data);
-                
                 if (projectsRes.data && Array.isArray(projectsRes.data)) {
                     setProjects(projectsRes.data);
-                    console.log('Set Projects State:', projectsRes.data);
                 } else {
                     console.error('Projects data is not an array:', projectsRes.data);
                 }
 
-                setUsers(usersRes.data || []);
+                if (usersRes.data && Array.isArray(usersRes.data)) {
+                    setUsers(usersRes.data);
+                    // Set reporter to current user if they exist in the users list
+                    const currentUserId = localStorage.getItem('userId');
+                    if (currentUserId && usersRes.data.some(user => user._id === currentUserId)) {
+                        setFormData(prev => ({ ...prev, reporter: currentUserId }));
+                    } else if (usersRes.data.length > 0) {
+                        // If current user not found, set first user as reporter
+                        setFormData(prev => ({ ...prev, reporter: usersRes.data[0]._id }));
+                    }
+                }
             } catch (err) {
                 console.error('Error fetching initial data:', err);
-                setError('Failed to load initial data');
+                setError('Failed to load initial data. Please try refreshing the page.');
             } finally {
                 setLoading(false);
             }
         };
+
         fetchInitialData();
     }, []);
 
-    // Fetch project-specific data when project changes
+    // Fetch sprints and epics when project changes
     useEffect(() => {
         const fetchProjectData = async () => {
+            if (!formData.project) return;
+
             try {
-                setLoading(true);
+                console.log('Fetching sprints for project:', formData.project);
                 const [sprintsRes, epicsRes] = await Promise.all([
-                    SprintService.getAll(),
-                    EpicService.getAll()
+                    SprintService.getByProject(formData.project),
+                    EpicService.getByProject(formData.project)
                 ]);
 
-                console.log('All Sprints:', sprintsRes.data);
-                console.log('All Epics:', epicsRes.data);
-
-                setSprints(sprintsRes.data || []);
-                setEpics(epicsRes.data || []);
+                if (sprintsRes.data) {
+                    setSprints(sprintsRes.data);
+                }
+                if (epicsRes.data) {
+                    setEpics(epicsRes.data);
+                }
             } catch (err) {
                 console.error('Error fetching project data:', err);
                 setError('Failed to load project data');
-            } finally {
-                setLoading(false);
             }
         };
 
         fetchProjectData();
-    }, []);
+    }, [formData.project]);
 
     const handleChange = (event) => {
         const { name, value } = event.target;
@@ -152,226 +167,386 @@ const AddIssue = () => {
         setSuccess('');
 
         try {
-            await IssueService.create(formData);
+            // Validate required fields
+            const requiredFields = ['title', 'description', 'type', 'status', 'priority', 'project', 'reporter'];
+            const missingFields = requiredFields.filter(field => !formData[field]);
+            
+            if (missingFields.length > 0) {
+                throw new Error(`Required fields missing: ${missingFields.join(', ')}`);
+            }
+
+            // Validate time estimates
+            const maxHours = 10000; // Maximum reasonable hours (about 1 year of work)
+            if (formData.originalEstimate && (Number(formData.originalEstimate) <= 0 || Number(formData.originalEstimate) > maxHours)) {
+                throw new Error(`Original estimate must be between 1 and ${maxHours} hours`);
+            }
+            if (formData.remainingEstimate && (Number(formData.remainingEstimate) <= 0 || Number(formData.remainingEstimate) > maxHours)) {
+                throw new Error(`Remaining estimate must be between 1 and ${maxHours} hours`);
+            }
+            if (formData.timeSpent && (Number(formData.timeSpent) <= 0 || Number(formData.timeSpent) > maxHours)) {
+                throw new Error(`Time spent must be between 1 and ${maxHours} hours`);
+            }
+
+            // Validate story points
+            if (formData.storyPoints && (Number(formData.storyPoints) <= 0 || Number(formData.storyPoints) > 100)) {
+                throw new Error('Story points must be between 1 and 100');
+            }
+
+            // Convert numeric fields and clean up the payload
+            const payload = {
+                title: formData.title.trim(),
+                description: formData.description.trim(),
+                type: formData.type.toLowerCase(),
+                status: formData.status === 'todo' ? 'todo' : formData.status === 'in progress' ? 'inprogress' : 'done',
+                priority: formData.priority.toLowerCase(),
+                project: formData.project,
+                reporter: formData.reporter,
+                assignee: formData.assignee || undefined,
+                sprint: formData.sprint || undefined,
+                epic: formData.epic || undefined,
+                storyPoints: formData.storyPoints ? Number(formData.storyPoints) : undefined,
+                originalEstimate: formData.originalEstimate ? Number(formData.originalEstimate) : undefined,
+                remainingEstimate: formData.remainingEstimate ? Number(formData.remainingEstimate) : undefined,
+                timeSpent: formData.timeSpent ? Number(formData.timeSpent) : undefined,
+                dueDate: formData.dueDate || undefined,
+                labels: [],
+                components: [],
+                watchers: []
+            };
+
+            // Remove any undefined values
+            Object.keys(payload).forEach(key => {
+                if (payload[key] === undefined) {
+                    delete payload[key];
+                }
+            });
+
+            console.log('Submitting issue with payload:', payload);
+            const response = await IssueService.create(payload);
+            
+            if (!response || !response.data) {
+                throw new Error('No response received from server');
+            }
+
+            console.log('Issue created successfully:', response.data);
             setSuccess('Issue created successfully!');
             setTimeout(() => {
                 navigate(projectId ? `/projects/${projectId}/issues` : '/issues');
             }, 2000);
         } catch (err) {
             console.error('Error creating issue:', err);
-            setError(err.response?.data?.message || 'Failed to create issue');
+            let errorMessage = 'Failed to create issue';
+            
+            if (err.response?.data?.message) {
+                errorMessage = err.response.data.message;
+            } else if (err.response?.data?.error) {
+                errorMessage = err.response.data.error;
+            } else if (err.response?.data?.details) {
+                errorMessage = Array.isArray(err.response.data.details) 
+                    ? err.response.data.details.join(', ')
+                    : err.response.data.details;
+            } else if (err.message) {
+                errorMessage = err.message;
+            }
+            
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
     };
 
+    if (loading && !projects.length && !users.length) {
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
+                <CircularProgress />
+            </Box>
+        );
+    }
+
     return (
         <Container component="main" maxWidth="md">
             <CssBaseline />
             <Box sx={{ mt: 4, mb: 4 }}>
-                <Typography component="h1" variant="h5" gutterBottom>
-                    Create New Issue
-                </Typography>
+                <Paper elevation={1} sx={{ p: 3, borderRadius: 2 }}>
+                    <Typography component="h1" variant="h5" gutterBottom>
+                        Create New Issue
+                    </Typography>
 
-                {error && (
-                    <Alert severity="error" sx={{ mb: 2 }}>
-                        {error}
-                    </Alert>
-                )}
+                    <Divider sx={{ mb: 3 }} />
 
-                {success && (
-                    <Alert severity="success" sx={{ mb: 2 }}>
-                        {success}
-                    </Alert>
-                )}
+                    {error && (
+                        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+                            {error}
+                        </Alert>
+                    )}
 
-                <form onSubmit={handleSubmit}>
-                    <Grid container spacing={2}>
-                        <Grid item xs={12}>
-                            <TextField
-                                required
-                                fullWidth
-                                name="title"
-                                label="Title"
-                                value={formData.title}
-                                onChange={handleChange}
-                            />
-                        </Grid>
+                    {success && (
+                        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
+                            {success}
+                        </Alert>
+                    )}
 
-                        <Grid item xs={12}>
-                            <TextField
-                                fullWidth
-                                multiline
-                                rows={4}
-                                name="description"
-                                label="Description"
-                                value={formData.description}
-                                onChange={handleChange}
-                            />
-                        </Grid>
-
-                        <Grid item xs={12} sm={6}>
-                            <FormControl fullWidth>
-                                <InputLabel>Project</InputLabel>
-                                <Select
-                                    name="project"
-                                    value={formData.project}
-                                    onChange={handleChange}
+                    <form onSubmit={handleSubmit}>
+                        <Grid container spacing={3}>
+                            <Grid item xs={12}>
+                                <TextField
                                     required
-                                    disabled={!!projectId}
-                                >
-                                    {projects.map((project) => {
-                                        console.log('Rendering project:', project);
-                                        return (
-                                            <MenuItem key={project._id} value={project._id}>
-                                                {project.projectName || project.name || 'Unnamed Project'}
-                                            </MenuItem>
-                                        );
-                                    })}
-                                </Select>
-                            </FormControl>
-                        </Grid>
-
-                        <Grid item xs={12} sm={6}>
-                            <FormControl fullWidth>
-                                <InputLabel>Type</InputLabel>
-                                <Select
-                                    name="type"
-                                    value={formData.type}
-                                    onChange={handleChange}
-                                    required
-                                >
-                                    {issueTypes.map((type) => (
-                                        <MenuItem key={type.value} value={type.value}>
-                                            {type.label}
-                                        </MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
-                        </Grid>
-
-                        <Grid item xs={12} sm={6}>
-                            <FormControl fullWidth>
-                                <InputLabel>Sprint</InputLabel>
-                                <Select
-                                    name="sprint"
-                                    value={formData.sprint}
-                                    onChange={handleChange}
-                                >
-                                    <MenuItem value="">None</MenuItem>
-                                    {sprints.map((sprint) => {
-                                        console.log('Rendering sprint:', sprint);
-                                        return (
-                                            <MenuItem key={sprint._id} value={sprint._id}>
-                                                {sprint.sprintName || sprint.name || 'Unnamed Sprint'}
-                                            </MenuItem>
-                                        );
-                                    })}
-                                </Select>
-                            </FormControl>
-                        </Grid>
-
-                        <Grid item xs={12} sm={6}>
-                            <FormControl fullWidth>
-                                <InputLabel>Epic</InputLabel>
-                                <Select
-                                    name="epic"
-                                    value={formData.epic}
-                                    onChange={handleChange}
-                                >
-                                    <MenuItem value="">None</MenuItem>
-                                    {epics.map((epic) => {
-                                        console.log('Rendering epic:', epic);
-                                        return (
-                                            <MenuItem key={epic._id} value={epic._id}>
-                                                {epic.epicName || epic.name || epic.title || 'Unnamed Epic'}
-                                            </MenuItem>
-                                        );
-                                    })}
-                                </Select>
-                            </FormControl>
-                        </Grid>
-
-                        <Grid item xs={12} sm={6}>
-                            <FormControl fullWidth>
-                                <InputLabel>Priority</InputLabel>
-                                <Select
-                                    name="priority"
-                                    value={formData.priority}
-                                    onChange={handleChange}
-                                    required
-                                >
-                                    {priorities.map((priority) => (
-                                        <MenuItem key={priority.value} value={priority.value}>
-                                            {priority.label}
-                                        </MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
-                        </Grid>
-
-                        <Grid item xs={12} sm={6}>
-                            <FormControl fullWidth>
-                                <InputLabel>Assignee</InputLabel>
-                                <Select
-                                    name="assignee"
-                                    value={formData.assignee}
-                                    onChange={handleChange}
-                                >
-                                    <MenuItem value="">Unassigned</MenuItem>
-                                    {users.map((user) => (
-                                        <MenuItem key={user.id} value={user.id}>
-                                            {user.username}
-                                        </MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
-                        </Grid>
-
-                        <Grid item xs={12} sm={6}>
-                            <FormControl fullWidth>
-                                <InputLabel>Reporter</InputLabel>
-                                <Select
-                                    name="reporter"
-                                    value={formData.reporter}
-                                    onChange={handleChange}
-                                    required
-                                >
-                                    {users.map((user) => (
-                                        <MenuItem key={user.id} value={user.id}>
-                                            {user.username}
-                                        </MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
-                        </Grid>
-
-                        <Grid item xs={12} sm={6}>
-                            <TextField
-                                fullWidth
-                                type="number"
-                                name="storyPoints"
-                                label="Story Points"
-                                value={formData.storyPoints}
-                                onChange={handleChange}
-                            />
-                        </Grid>
-
-                        <Grid item xs={12}>
-                            <Box sx={{ mt: 2 }}>
-                                <Button
-                                    type="submit"
-                                    variant="contained"
-                                    color="primary"
-                                    disabled={loading}
                                     fullWidth
-                                >
-                                    {loading ? <CircularProgress size={24} /> : 'Create Issue'}
-                                </Button>
-                            </Box>
+                                    name="title"
+                                    label="Issue Title"
+                                    value={formData.title}
+                                    onChange={handleChange}
+                                    error={!formData.title}
+                                    helperText={!formData.title && "Title is required"}
+                                />
+                            </Grid>
+
+                            <Grid item xs={12}>
+                                <TextField
+                                    required
+                                    fullWidth
+                                    multiline
+                                    rows={4}
+                                    name="description"
+                                    label="Description"
+                                    value={formData.description}
+                                    onChange={handleChange}
+                                    error={!formData.description}
+                                    helperText={!formData.description && "Description is required"}
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <FormControl fullWidth required error={!formData.project}>
+                                    <InputLabel>Project</InputLabel>
+                                    <Select
+                                        name="project"
+                                        value={formData.project}
+                                        onChange={handleChange}
+                                        disabled={!!projectId}
+                                    >
+                                        {projects.map((project) => (
+                                            <MenuItem key={project._id} value={project._id}>
+                                                {project.projectName}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <FormControl fullWidth required error={!formData.type}>
+                                    <InputLabel>Issue Type</InputLabel>
+                                    <Select
+                                        name="type"
+                                        value={formData.type}
+                                        onChange={handleChange}
+                                    >
+                                        {issueTypes.map((type) => (
+                                            <MenuItem 
+                                                key={type.value} 
+                                                value={type.value}
+                                                sx={{
+                                                    '&::before': {
+                                                        content: '""',
+                                                        display: 'inline-block',
+                                                        width: 8,
+                                                        height: 8,
+                                                        borderRadius: '50%',
+                                                        backgroundColor: type.color,
+                                                        marginRight: 1
+                                                    }
+                                                }}
+                                            >
+                                                {type.label}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <FormControl fullWidth required error={!formData.status}>
+                                    <InputLabel>Status</InputLabel>
+                                    <Select
+                                        name="status"
+                                        value={formData.status}
+                                        onChange={handleChange}
+                                    >
+                                        {statuses.map((status) => (
+                                            <MenuItem key={status.value} value={status.value}>
+                                                {status.label}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <FormControl fullWidth required error={!formData.priority}>
+                                    <InputLabel>Priority</InputLabel>
+                                    <Select
+                                        name="priority"
+                                        value={formData.priority}
+                                        onChange={handleChange}
+                                    >
+                                        {priorities.map((priority) => (
+                                            <MenuItem 
+                                                key={priority.value} 
+                                                value={priority.value}
+                                                sx={{
+                                                    '&::before': {
+                                                        content: '""',
+                                                        display: 'inline-block',
+                                                        width: 8,
+                                                        height: 8,
+                                                        borderRadius: '50%',
+                                                        backgroundColor: priority.color,
+                                                        marginRight: 1
+                                                    }
+                                                }}
+                                            >
+                                                {priority.label}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <FormControl fullWidth>
+                                    <InputLabel>Sprint</InputLabel>
+                                    <Select
+                                        name="sprint"
+                                        value={formData.sprint}
+                                        onChange={handleChange}
+                                    >
+                                        <MenuItem value="">None</MenuItem>
+                                        {sprints.map((sprint) => (
+                                            <MenuItem key={sprint._id} value={sprint._id}>
+                                                {sprint.name}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <FormControl fullWidth>
+                                    <InputLabel>Epic</InputLabel>
+                                    <Select
+                                        name="epic"
+                                        value={formData.epic}
+                                        onChange={handleChange}
+                                        disabled={formData.type === 'epic'}
+                                    >
+                                        <MenuItem value="">None</MenuItem>
+                                        {epics.map((epic) => (
+                                            <MenuItem key={epic._id} value={epic._id}>
+                                                {epic.title}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <FormControl fullWidth>
+                                    <InputLabel>Assignee</InputLabel>
+                                    <Select
+                                        name="assignee"
+                                        value={formData.assignee}
+                                        onChange={handleChange}
+                                    >
+                                        <MenuItem value="">Unassigned</MenuItem>
+                                        {users.map((user) => (
+                                            <MenuItem key={user._id} value={user._id}>
+                                                {user.name}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <FormControl fullWidth required error={!formData.reporter}>
+                                    <InputLabel>Reporter</InputLabel>
+                                    <Select
+                                        name="reporter"
+                                        value={formData.reporter}
+                                        onChange={handleChange}
+                                    >
+                                        {users.length > 0 ? (
+                                            users.map((user) => (
+                                                <MenuItem key={user._id} value={user._id}>
+                                                    {user.name || user.username}
+                                                </MenuItem>
+                                            ))
+                                        ) : (
+                                            <MenuItem value="">No users available</MenuItem>
+                                        )}
+                                    </Select>
+                                </FormControl>
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    type="number"
+                                    name="storyPoints"
+                                    label="Story Points"
+                                    value={formData.storyPoints}
+                                    onChange={handleChange}
+                                    inputProps={{ min: 0 }}
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    type="number"
+                                    name="originalEstimate"
+                                    label="Original Estimate (hours)"
+                                    value={formData.originalEstimate}
+                                    onChange={handleChange}
+                                    inputProps={{ min: 0 }}
+                                />
+                            </Grid>
+
+                            <Grid item xs={12}>
+                                <TextField
+                                    fullWidth
+                                    type="date"
+                                    name="dueDate"
+                                    label="Due Date"
+                                    value={formData.dueDate}
+                                    onChange={handleChange}
+                                    InputLabelProps={{ shrink: true }}
+                                />
+                            </Grid>
+
+                            <Grid item xs={12}>
+                                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
+                                    <Button
+                                        variant="outlined"
+                                        onClick={() => navigate(-1)}
+                                        disabled={loading}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        variant="contained"
+                                        disabled={loading}
+                                        sx={{ minWidth: 120 }}
+                                    >
+                                        {loading ? <CircularProgress size={24} /> : 'Create Issue'}
+                                    </Button>
+                                </Box>
+                            </Grid>
                         </Grid>
-                    </Grid>
-                </form>
+                    </form>
+                </Paper>
             </Box>
         </Container>
     );

@@ -17,9 +17,10 @@ import {
 import epicService from '../service/EpicService';
 import projectService from '../service/ProjectService';
 
-const AddEpic = ({ open, onClose, projectId: initialProjectId }) => {
+const AddEpic = ({ open, onClose, projectId: initialProjectId, userId }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
     const [projects, setProjects] = useState([]);
     const [epicData, setEpicData] = useState({
         name: '',
@@ -54,19 +55,17 @@ const AddEpic = ({ open, onClose, projectId: initialProjectId }) => {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        const newValue = name === 'project' ? (value || '') : (value === '' ? undefined : value);
+        console.log(`Changing ${name} to:`, newValue);
         setEpicData(prev => ({
             ...prev,
-            [name]: value
+            [name]: newValue
         }));
     };
 
     const validateForm = () => {
         if (!epicData.name.trim()) {
             setError('Epic name is required');
-            return false;
-        }
-        if (!epicData.project) {
-            setError('Project is required');
             return false;
         }
         if (epicData.startDate && epicData.dueDate && new Date(epicData.startDate) > new Date(epicData.dueDate)) {
@@ -78,18 +77,41 @@ const AddEpic = ({ open, onClose, projectId: initialProjectId }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!validateForm()) return;
-
-        setLoading(true);
         setError('');
+        setSuccess('');
+        setLoading(true);
 
-        try {
-            await epicService.create(epicData);
+        try { 
+            // Create a new object for epic data
+            const data = {
+                name: epicData.name,
+                description: epicData.description,
+                status: epicData.status || 'to do',
+                priority: epicData.priority || 'medium',
+                owner: userId,
+                project: epicData.project || null,  
+            };
+
+            // Only add dates if they are set
+            if (epicData.startDate) {
+                data.startDate = epicData.startDate;
+            }
+            if (epicData.dueDate) {
+                data.dueDate = epicData.dueDate;
+            }
+
+            console.log('Epic data before submission:', epicData);
+            console.log('Data being sent to server:', data);
+            const response = await epicService.create(data);
+            console.log('Epic created successfully:', response);
             onClose(true); // true indicates that we should refresh the list
+            
+            // Show success message
+            setSuccess('Epic created successfully!');
         } catch (err) {
             const errorMessage = err.response?.data?.message || 'Failed to create epic';
             setError(errorMessage);
-            console.error('Error creating epic:', err.response?.data || err);
+            console.error('Error creating epic:', err);
         } finally {
             setLoading(false);
         }
@@ -125,6 +147,11 @@ const AddEpic = ({ open, onClose, projectId: initialProjectId }) => {
                             {error}
                         </Alert>
                     )}
+                    {success && (
+                        <Alert severity="success" sx={{ mb: 2 }}>
+                            {success}
+                        </Alert>
+                    )}
 
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <TextField
@@ -146,14 +173,17 @@ const AddEpic = ({ open, onClose, projectId: initialProjectId }) => {
                             fullWidth
                         />
 
-                        <FormControl fullWidth required>
-                            <InputLabel>Project</InputLabel>
+                        <FormControl fullWidth>
+                            <InputLabel>Project (Optional)</InputLabel>
                             <Select
                                 name="project"
-                                value={epicData.project}
+                                value={epicData.project || ''}
                                 onChange={handleChange}
-                                label="Project"
+                                label="Project (Optional)"
                             >
+                                <MenuItem value="">
+                                    <em>None</em>
+                                </MenuItem>
                                 {projects.map((project) => (
                                     <MenuItem key={project._id} value={project._id}>
                                         {project.projectName}

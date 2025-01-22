@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Box,
@@ -13,7 +13,19 @@ import {
     TableBody,
     Breadcrumbs,
     Link,
-    IconButton
+    IconButton,
+    Avatar,
+    ToggleButton,
+    ToggleButtonGroup,
+    Card,
+    CardContent,
+    CardActions,
+    Chip,
+    FormControl,
+    Select,
+    MenuItem,
+    TableContainer,
+    Paper
 } from '@mui/material';
 import HomeIcon from '@mui/icons-material/Home';
 import GroupIcon from '@mui/icons-material/Group';
@@ -25,14 +37,143 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import SettingsIcon from '@mui/icons-material/Settings';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import MenuIcon from '@mui/icons-material/Menu';
+import AddIcon from '@mui/icons-material/Add';
+import TableViewIcon from '@mui/icons-material/TableView';
+import ViewModuleIcon from '@mui/icons-material/ViewModule';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import ProjectService from '../service/ProjectService';
 import SprintService from '../service/SprintService';
 import EpicService from '../service/EpicService';
 import BacklogService from '../service/BacklogService';
+import AddEpic from '../Epic/AddEpic';
+import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
+
+const ItemTypes = {
+    EPIC: 'epic'
+};
+
+const EpicCard = ({ epic, onDrop }) => {
+    const [{ isDragging }, drag] = useDrag(() => ({
+        type: ItemTypes.EPIC,
+        item: { id: epic._id, status: epic.status },
+        collect: (monitor) => ({
+            isDragging: monitor.isDragging()
+        })
+    }));
+
+    return (
+        <div
+            ref={drag}
+            style={{
+                opacity: isDragging ? 0.5 : 1,
+                cursor: 'move'
+            }}
+        >
+            <Card sx={{
+                '&:hover': {
+                    boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
+                    transform: 'translateY(-2px)',
+                    transition: 'all 0.2s ease'
+                }
+            }}>
+                <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                        {epic.name}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        {epic.description}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
+                        <FormControl size="small" sx={{ minWidth: 120 }}>
+                            <Select
+                                value={epic.status || 'to do'}
+                                onChange={(e) => handleStatusChange(epic._id, e.target.value)}
+                                sx={{ height: 32 }}
+                            >
+                                <MenuItem value="to do">To Do</MenuItem>
+                                <MenuItem value="in progress">In Progress</MenuItem>
+                                <MenuItem value="done">Completed</MenuItem>
+                            </Select>
+                        </FormControl>
+                        <Chip 
+                            label={epic.priority}
+                            size="small"
+                            color={
+                                epic.priority === 'high' ? 'error' :
+                                epic.priority === 'medium' ? 'warning' : 'info'
+                            }
+                            variant="outlined"
+                        />
+                    </Box>
+                    {epic.startDate && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                            Start: {new Date(epic.startDate).toLocaleDateString()}
+                        </Typography>
+                    )}
+                    {epic.dueDate && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                            Due: {new Date(epic.dueDate).toLocaleDateString()}
+                        </Typography>
+                    )}
+                </CardContent>
+                <CardActions>
+                    <Button size="small" onClick={() => handleItemClick(epic, 'epic')}>
+                        View Details
+                    </Button>
+                </CardActions>
+            </Card>
+        </div>
+    );
+};
+
+const StatusColumn = ({ status, title, epics, onDrop }) => {
+    const [{ isOver }, drop] = useDrop(() => ({
+        accept: ItemTypes.EPIC,
+        drop: (item) => onDrop(item.id, status),
+        collect: (monitor) => ({
+            isOver: monitor.isOver()
+        })
+    }));
+
+    return (
+        <Box
+            ref={drop}
+            sx={{
+                width: 300,
+                minWidth: 300,
+                bgcolor: isOver ? 'action.hover' : 'background.paper',
+                borderRadius: 1,
+                p: 2,
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'background-color 0.2s ease'
+            }}
+        >
+            <Typography variant="h6" sx={{ mb: 2 }}>
+                {title} ({epics?.length || 0})
+            </Typography>
+            <Box sx={{ 
+                minHeight: 100,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2
+            }}>
+                {epics?.map((epic, index) => (
+                    <EpicCard 
+                        key={epic._id} 
+                        epic={epic} 
+                        index={index}
+                    />
+                ))}
+            </Box>
+        </Box>
+    );
+};
 
 const ProjectDetails = () => {
-    const { id } = useParams();
     const navigate = useNavigate();
+    const { id } = useParams();
     const [project, setProject] = useState(null);
     const [sprints, setSprints] = useState([]);
     const [epics, setEpics] = useState([]);
@@ -43,6 +184,147 @@ const ProjectDetails = () => {
     const [selectedType, setSelectedType] = useState(null);
     const [showTable, setShowTable] = useState(false);
     const [projectType, setProjectType] = useState(localStorage.getItem('projectType'));
+    const [projectKey, setProjectKey] = useState('');
+    const [openAddEpicDialog, setOpenAddEpicDialog] = useState(false);
+    const [epicViewMode, setEpicViewMode] = useState('table');
+    const [epicsByStatus, setEpicsByStatus] = useState({
+        'to do': [],
+        'in progress': [],
+        'done': []
+    });
+    const [activeId, setActiveId] = useState(null);
+    const [activeEpic, setActiveEpic] = useState(null);
+
+    // Constants for status values
+    const STATUS = {
+        TODO: 'to do',
+        IN_PROGRESS: 'in progress',
+        DONE: 'done'
+    };
+
+    const DISPLAY_STATUS = {
+        'to do': 'To Do',
+        'in progress': 'In Progress',
+        'done': 'Completed'
+    };
+
+    useEffect(() => {
+        const fetchProjectData = async () => {
+            setLoading(true);
+            try {
+                const projectResponse = await ProjectService.getProjectById(id);
+                setProject(projectResponse.data);
+                setProjectKey(projectResponse.data.key);
+
+                const epicResponse = await EpicService.getByProject(id);
+                console.log('Epic data from server:', epicResponse.data); // Debug log
+                setEpics(epicResponse.data);
+
+                const sprintResponse = await SprintService.getByProject(id);
+                setSprints(sprintResponse.data);
+
+                const backlogResponse = await BacklogService.getByProject(id);
+                setBacklogs(backlogResponse.data);
+
+            } catch (err) {
+                console.error('Error fetching project data:', err);
+                setError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (id) {
+            fetchProjectData();
+        }
+    }, [id]);
+
+    useEffect(() => {
+        const handleStorageChange = () => {
+            const newProjectType = localStorage.getItem('projectType');
+            setProjectType(newProjectType);
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
+    }, []);
+
+    useEffect(() => {
+        const animation = requestAnimationFrame(() => {
+            // setEnabled(true);
+        });
+
+        return () => {
+            cancelAnimationFrame(animation);
+            // setEnabled(false);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (epics.length > 0) {
+            console.log('Current epics:', epics);
+            
+            // Initialize all status arrays
+            const grouped = {
+                [STATUS.TODO]: [],
+                [STATUS.IN_PROGRESS]: [],
+                [STATUS.DONE]: []
+            };
+            
+            // Group epics by status
+            epics.forEach(epic => {
+                const status = epic.status || STATUS.TODO;
+                if (grouped[status]) {
+                    grouped[status].push(epic);
+                } else {
+                    grouped[STATUS.TODO].push(epic);
+                }
+            });
+            
+            console.log('Grouped epics:', grouped);
+            setEpicsByStatus(grouped);
+        }
+    }, [epics]);
+
+    const handleStatusChange = async (epicId, newStatus) => {
+        console.log('Changing status:', { epicId, newStatus });
+        const epic = epics.find(e => e._id === epicId);
+        if (!epic) {
+            console.error('Epic not found:', epicId);
+            return;
+        }
+
+        try {
+            const updateData = {
+                name: epic.name,
+                description: epic.description,
+                priority: epic.priority,
+                startDate: epic.startDate,
+                dueDate: epic.dueDate,
+                project: id,
+                status: newStatus.toLowerCase()
+            };
+            
+            console.log('Sending update for epic:', updateData);
+            await EpicService.update(epicId, updateData);
+            
+            // Refresh epics
+            const response = await EpicService.getByProject(id);
+            setEpics(response.data);
+        } catch (error) {
+            console.error('Error updating epic status:', error.response?.data || error.message);
+            setError('Failed to update epic status. Please try again.');
+        }
+    };
+
+    const getStatusDisplay = (backendStatus) => {
+        const statusMap = {
+            'todo': 'to do',
+            'progress': 'in progress',
+            'done': 'completed'
+        };
+        return statusMap[backendStatus] || 'to do';
+    };
 
     const handleItemClick = (item, type) => {
         setSelectedItem(item);
@@ -54,6 +336,58 @@ const ProjectDetails = () => {
         setSelectedType(type);
         setSelectedItem(null);
         setShowTable(true);
+    };
+
+    const handleEpicViewChange = (event, newView) => {
+        if (newView !== null) {
+            setEpicViewMode(newView);
+        }
+    };
+
+    const handleDrop = async (epicId, newStatus) => {
+        try {
+            const epic = epics.find(e => e._id === epicId);
+            if (!epic) {
+                console.error('Epic not found:', epicId);
+                return;
+            }
+
+            // Optimistically update the UI
+            const newEpicsByStatus = { ...epicsByStatus };
+            const oldStatus = epic.status;
+            
+            // Remove from old status
+            newEpicsByStatus[oldStatus] = newEpicsByStatus[oldStatus]
+                .filter(e => e._id !== epicId);
+            
+            // Add to new status
+            const updatedEpic = { ...epic, status: newStatus };
+            newEpicsByStatus[newStatus] = [...(newEpicsByStatus[newStatus] || []), updatedEpic];
+            
+            setEpicsByStatus(newEpicsByStatus);
+
+            // Update in backend
+            const updateData = {
+                ...epic,
+                status: newStatus,
+                project: id
+            };
+            delete updateData._id;
+            
+            console.log('Updating epic status via drag:', updateData);
+            await EpicService.update(epicId, updateData);
+            
+            // Refresh epics to ensure sync
+            const response = await EpicService.getByProject(id);
+            setEpics(response.data);
+        } catch (error) {
+            console.error('Error updating epic status:', error.response?.data || error.message);
+            setError('Failed to update epic status. Please try again.');
+            
+            // Revert optimistic update on error
+            const response = await EpicService.getByProject(id);
+            setEpics(response.data);
+        }
     };
 
     const renderTable = () => {
@@ -148,6 +482,159 @@ const ProjectDetails = () => {
                     </TableBody>
                 </Table>
             </Box>
+        );
+    };
+
+    const renderEpicTable = () => {
+        return (
+            <TableContainer component={Paper} sx={{ mt: 2 }}>
+                <Table>
+                    <TableHead>
+                        <TableRow>
+                            <TableCell>Name</TableCell>
+                            <TableCell>Description</TableCell>
+                            <TableCell>Status</TableCell>
+                            <TableCell>Priority</TableCell>
+                            <TableCell>Start Date</TableCell>
+                            <TableCell>Due Date</TableCell>
+                            <TableCell>Actions</TableCell>
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {epics.map((epic) => (
+                            <TableRow key={epic._id}>
+                                <TableCell>{epic.name}</TableCell>
+                                <TableCell>{epic.description}</TableCell>
+                                <TableCell>
+                                    <FormControl size="small" sx={{ minWidth: 120 }}>
+                                        <Select
+                                            value={epic.status || STATUS.TODO}
+                                            onChange={(e) => handleStatusChange(epic._id, e.target.value)}
+                                            sx={{ height: 32 }}
+                                        >
+                                            <MenuItem value={STATUS.TODO}>To Do</MenuItem>
+                                            <MenuItem value={STATUS.IN_PROGRESS}>In Progress</MenuItem>
+                                            <MenuItem value={STATUS.DONE}>Completed</MenuItem>
+                                        </Select>
+                                    </FormControl>
+                                </TableCell>
+                                <TableCell>
+                                    <Chip 
+                                        label={epic.priority}
+                                        size="small"
+                                        color={
+                                            epic.priority === 'high' ? 'error' :
+                                            epic.priority === 'medium' ? 'warning' : 'info'
+                                        }
+                                        variant="outlined"
+                                    />
+                                </TableCell>
+                                <TableCell>
+                                    {epic.startDate ? new Date(epic.startDate).toLocaleDateString() : '-'}
+                                </TableCell>
+                                <TableCell>
+                                    {epic.dueDate ? new Date(epic.dueDate).toLocaleDateString() : '-'}
+                                </TableCell>
+                                <TableCell>
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => handleItemClick(epic, 'epic')}
+                                        title="View Details"
+                                    >
+                                        <VisibilityIcon fontSize="small" />
+                                    </IconButton>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </TableContainer>
+        );
+    };
+
+    const renderEpicCard = (epic, index) => {
+        console.log('Rendering epic card:', epic); // Debug log
+        return (
+            <Card
+                key={epic._id}
+                sx={{ 
+                    '&:hover': {
+                        boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
+                        transform: 'translateY(-2px)',
+                        transition: 'all 0.2s ease'
+                    }
+                }}
+            >
+                <CardContent sx={{ flex: 1 }}>
+                    <Typography variant="h6" component="div" gutterBottom>
+                        {epic.name}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        {epic.description}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+                        <FormControl size="small" sx={{ minWidth: 120 }}>
+                            <Select
+                                value={epic.status || STATUS.TODO}
+                                onChange={(e) => handleStatusChange(epic._id, e.target.value)}
+                                sx={{ height: 32 }}
+                            >
+                                <MenuItem value={STATUS.TODO}>To Do</MenuItem>
+                                <MenuItem value={STATUS.IN_PROGRESS}>In Progress</MenuItem>
+                                <MenuItem value={STATUS.DONE}>Completed</MenuItem>
+                            </Select>
+                        </FormControl>
+                        <Chip 
+                            label={epic.priority}
+                            size="small"
+                            color={
+                                epic.priority === 'high' ? 'error' :
+                                epic.priority === 'medium' ? 'warning' : 'info'
+                            }
+                            variant="outlined"
+                        />
+                    </Box>
+                    {epic.startDate && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                            Start: {new Date(epic.startDate).toLocaleDateString()}
+                        </Typography>
+                    )}
+                    {epic.dueDate && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                            Due: {new Date(epic.dueDate).toLocaleDateString()}
+                        </Typography>
+                    )}
+                </CardContent>
+                <CardActions>
+                    <Button size="small" onClick={() => handleItemClick(epic, 'epic')}>
+                        View Details
+                    </Button>
+                </CardActions>
+            </Card>
+        );
+    };
+
+    const renderEpicCards = () => {
+        const statusColumns = [
+            { id: STATUS.TODO, title: 'To Do' },
+            { id: STATUS.IN_PROGRESS, title: 'In Progress' },
+            { id: STATUS.DONE, title: 'Completed' }
+        ];
+
+        return (
+            <DndProvider backend={HTML5Backend}>
+                <Box sx={{ display: 'flex', gap: 2, p: 2, overflowX: 'auto' }}>
+                    {statusColumns.map(column => (
+                        <StatusColumn
+                            key={column.id}
+                            status={column.id}
+                            title={column.title}
+                            epics={epicsByStatus[column.id]}
+                            onDrop={handleDrop}
+                        />
+                    ))}
+                </Box>
+            </DndProvider>
         );
     };
 
@@ -328,159 +815,83 @@ const ProjectDetails = () => {
         <AppBar 
             position="fixed" 
             sx={{ 
-                zIndex: (theme) => theme.zIndex.drawer + 1,
-                backgroundColor: '#fff',
-                color: '#1e293b',
-                borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
-                boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03)'
+                zIndex: 1100,
+                backgroundColor: '#1976d2',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
             }}
         >
-            <Toolbar sx={{ display: 'flex', gap: 2, minHeight: '64px !important' }}>
+            <Toolbar sx={{ minHeight: '64px !important' }}>
                 <IconButton
-                    color="inherit"
-                    aria-label="open drawer"
+                    size="large"
                     edge="start"
-                    onClick={() => {}}
+                    color="inherit"
+                    aria-label="menu"
                     sx={{ mr: 2 }}
                 >
                     <MenuIcon />
                 </IconButton>
-                <Box sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center',
-                    gap: 4,
-                    width: '100%'
-                }}>
-                    <Typography
-                        variant="h6"
-                        noWrap
-                        component="div"
+                <Breadcrumbs 
+                    separator={<NavigateNextIcon fontSize="small" sx={{ color: 'rgba(255,255,255,0.7)' }} />}
+                    aria-label="breadcrumb"
+                    sx={{ flex: 1, '& .MuiBreadcrumbs-li': { display: 'flex', alignItems: 'center' } }}
+                >
+                    <Link
+                        color="inherit"
+                        href="/"
                         sx={{ 
-                            fontSize: '1.125rem',
-                            fontWeight: 600,
-                            color: '#1e293b',
-                            flexShrink: 0
+                            display: 'flex', 
+                            alignItems: 'center',
+                            color: 'white',
+                            textDecoration: 'none',
+                            '&:hover': { textDecoration: 'underline' }
                         }}
                     >
-                        Project Management
+                        <HomeIcon sx={{ mr: 0.5 }} fontSize="small" />
+                        Home
+                    </Link>
+                    <Link
+                        color="inherit"
+                        href="/projects"
+                        sx={{ 
+                            color: 'white',
+                            textDecoration: 'none',
+                            '&:hover': { textDecoration: 'underline' }
+                        }}
+                    >
+                        Projects
+                    </Link>
+                    <Typography color="rgba(255,255,255,0.7)">
+                        {project?.name || 'Project Details'}
                     </Typography>
-                    
-                    <Breadcrumbs 
-                        separator={
-                            <NavigateNextIcon 
-                                fontSize="small" 
-                                sx={{ color: '#94a3b8' }}
-                            />
-                        }
-                        aria-label="breadcrumb"
-                        sx={{
-                            '& .MuiBreadcrumbs-ol': {
-                                flexWrap: 'nowrap'
-                            }
-                        }}
-                    >
-                        {renderBreadcrumbs().map((path, index) => {
-                            const isLast = index === renderBreadcrumbs().length - 1;
-                            return isLast ? (
-                                <Typography
-                                    key={path.name}
-                                    color="text.primary"
-                                    sx={{ 
-                                        fontSize: '0.875rem',
-                                        fontWeight: 500,
-                                        color: '#1e293b',
-                                        whiteSpace: 'nowrap'
-                                    }}
-                                >
-                                    {path.name}
-                                </Typography>
-                            ) : (
-                                <Link
-                                    key={path.name}
-                                    color="inherit"
-                                    href={path.path}
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        if (path.onClick) {
-                                            path.onClick();
-                                        } else {
-                                            navigate(path.path);
-                                        }
-                                    }}
-                                    sx={{ 
-                                        fontSize: '0.875rem',
-                                        textDecoration: 'none',
-                                        color: '#64748b',
-                                        whiteSpace: 'nowrap',
-                                        '&:hover': {
-                                            color: '#1e293b',
-                                            textDecoration: 'none'
-                                        }
-                                    }}
-                                >
-                                    {path.name}
-                                </Link>
-                            );
-                        })}
-                    </Breadcrumbs>
-                </Box>
+                </Breadcrumbs>
+                <IconButton color="inherit">
+                    <AccountCircleIcon />
+                </IconButton>
             </Toolbar>
         </AppBar>
     );
 
-    useEffect(() => {
-        const fetchProjectData = async () => {
-            try {
-                const [projectResponse, sprintsResponse, epicsResponse, backlogsResponse] = await Promise.all([
-                    ProjectService.getProjectById(id),
-                    SprintService.getAll(),
-                    EpicService.getByProject(id),
-                    BacklogService.getAll()
-                ]);
-
-                if (projectResponse.data) {
-                    setProject(projectResponse.data);
-                }
-                if (sprintsResponse.data) {
-                    const projectSprints = sprintsResponse.data.filter(sprint => 
-                        sprint.project?._id === id || sprint.project === id
-                    );
-                    setSprints(projectSprints);
-                }
-                if (epicsResponse.data) {
-                    setEpics(epicsResponse.data);
-                }
-                if (backlogsResponse.data) {
-                    const projectBacklogs = backlogsResponse.data.filter(backlog => 
-                        backlog.project?._id === id || backlog.project === id
-                    );
-                    setBacklogs(projectBacklogs);
-                }
-                setLoading(false);
-            } catch (err) {
-                console.error('Error fetching data:', err);
-                setError(err.response?.data?.message || 'Error fetching project details');
-                setLoading(false);
-            }
-        };
-
-        if (id) {
-            fetchProjectData();
-        }
-    }, [id]);
-
-    useEffect(() => {
-        const handleStorageChange = () => {
-            const newProjectType = localStorage.getItem('projectType');
-            setProjectType(newProjectType);
-        };
-
-        window.addEventListener('storage', handleStorageChange);
-        return () => window.removeEventListener('storage', handleStorageChange);
-    }, []);
-
     const handleNavigation = (path) => {
         navigate(path);
+    };
+
+    // Add Epic dialog handlers
+    const handleOpenAddEpicDialog = () => {
+        setOpenAddEpicDialog(true);
+    };
+
+    const handleCloseAddEpicDialog = () => {
+        setOpenAddEpicDialog(false);
+    };
+
+    const handleEpicAdded = async () => {
+        try {
+            const response = await EpicService.getByProject(id);
+            setEpics(response.data);
+            handleCloseAddEpicDialog();
+        } catch (error) {
+            console.error('Error fetching epics:', error);
+        }
     };
 
     if (loading) {
@@ -496,56 +907,149 @@ const ProjectDetails = () => {
     }
 
     return (
-        <Box sx={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            height: '100vh',
-            overflow: 'hidden',
-            bgcolor: '#f8fafc'
-        }}>
-            {topNavBar}
-            <Box sx={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                height: 'calc(100vh - 64px)',
-                mt: '64px'
-            }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
+            {/* Navbar */}
+            <AppBar 
+                position="fixed" 
+                sx={{ 
+                    zIndex: 1100,
+                    backgroundColor: '#1976d2',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
+                }}
+            >
+                <Toolbar sx={{ minHeight: '64px !important' }}>
+                    <IconButton
+                        size="large"
+                        edge="start"
+                        color="inherit"
+                        aria-label="menu"
+                        sx={{ mr: 2 }}
+                    >
+                        <MenuIcon />
+                    </IconButton>
+                    <Breadcrumbs 
+                        separator={<NavigateNextIcon fontSize="small" sx={{ color: 'rgba(255,255,255,0.7)' }} />}
+                        aria-label="breadcrumb"
+                        sx={{ flex: 1, '& .MuiBreadcrumbs-li': { display: 'flex', alignItems: 'center' } }}
+                    >
+                        <Link
+                            color="inherit"
+                            href="/"
+                            sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center',
+                                color: 'white',
+                                textDecoration: 'none',
+                                '&:hover': { textDecoration: 'underline' }
+                            }}
+                        >
+                            <HomeIcon sx={{ mr: 0.5 }} fontSize="small" />
+                            Home
+                        </Link>
+                        <Link
+                            color="inherit"
+                            href="/projects"
+                            sx={{ 
+                                color: 'white',
+                                textDecoration: 'none',
+                                '&:hover': { textDecoration: 'underline' }
+                            }}
+                        >
+                            Projects
+                        </Link>
+                        <Typography color="rgba(255,255,255,0.7)">
+                            {project?.name || 'Project Details'}
+                        </Typography>
+                    </Breadcrumbs>
+                    <IconButton color="inherit">
+                        <AccountCircleIcon />
+                    </IconButton>
+                </Toolbar>
+            </AppBar>
+
+            <Box sx={{ display: 'flex', flex: 1 }}>
+                {/* Left side - Vertical Sections */}
                 <Box sx={{ 
+                    width: '240px',
+                    backgroundColor: '#fff',
+                    borderRight: '1px solid rgba(0, 0, 0, 0.12)',
                     display: 'flex',
-                    flex: 1,
-                    overflow: 'hidden'
+                    flexDirection: 'column',
+                    height: '100vh',
+                    position: 'fixed',
+                    left: 0,
+                    top: 64,
+                    color: '#1976d2',
+                    zIndex: 100
                 }}>
-                    {/* Left side - Vertical Sections */}
+                    {/* Project Key Avatar */}
                     <Box sx={{ 
-                        width: '240px',
-                        backgroundColor: '#fff',
-                        borderRight: '1px solid rgba(0, 0, 0, 0.06)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        overflow: 'auto'
+                        display: 'flex', 
+                        alignItems: 'center',
+                        px: 3,
+                        py: 3,
+                        borderBottom: '1px solid rgba(0, 0, 0, 0.12)',
+                        mb: 1
                     }}>
-                        {/* Epics Section */}
+                        <Avatar 
+                            sx={{ 
+                                bgcolor: '#1976d2',
+                                width: 40,
+                                height: 40,
+                                fontSize: '1.2rem',
+                                fontWeight: 600,
+                                mr: 2
+                            }}
+                        >
+                            {projectKey?.charAt(0)}
+                        </Avatar>
                         <Box>
+                            <Typography
+                                variant="subtitle1"
+                                sx={{
+                                    color: '#1976d2',
+                                    fontWeight: 600,
+                                    fontSize: '1rem',
+                                    lineHeight: 1.2
+                                }}
+                            >
+                                {projectKey}
+                            </Typography>
+                            <Typography
+                                variant="caption"
+                                sx={{
+                                    color: 'rgba(25, 118, 210, 0.7)',
+                                    fontSize: '0.75rem'
+                                }}
+                            >
+                                {project?.name || 'Project'}
+                            </Typography>
+                        </Box>
+                    </Box>
+
+                    {/* Menu Items */}
+                    <Box sx={{ flex: 1, overflow: 'auto' }}>
+                        {/* Epics Section */}
+                        <Box sx={{ mt: 2 }}>
                             <Typography
                                 variant="subtitle2"
                                 onClick={() => handleSectionClick('epic')}
                                 sx={{
                                     px: 3,
                                     py: 2.5,
-                                    backgroundColor: selectedType === 'epic' && showTable ? 'rgba(59, 130, 246, 0.08)' : '#fff',
-                                    color: selectedType === 'epic' && showTable ? '#2563eb' : '#64748b',
-                                    fontWeight: 600,
-                                    fontSize: '0.813rem',
+                                    backgroundColor: selectedType === 'epic' && showTable ? 'rgba(25, 118, 210, 0.08)' : 'transparent',
+                                    color: selectedType === 'epic' && showTable ? '#1976d2' : 'rgba(25, 118, 210, 0.7)',
+                                    fontWeight: 500,
+                                    fontSize: '0.875rem',
                                     letterSpacing: '0.3px',
                                     cursor: 'pointer',
                                     transition: 'all 0.2s ease',
-                                    borderLeft: selectedType === 'epic' && showTable ? '3px solid #2563eb' : '3px solid transparent',
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: 2,
                                     '&:hover': {
-                                        backgroundColor: 'rgba(59, 130, 246, 0.04)',
-                                        color: '#2563eb'
+                                        backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                                        color: '#1976d2'
                                     }
                                 }}
                             >
@@ -569,20 +1073,19 @@ const ProjectDetails = () => {
                                     sx={{
                                         px: 3,
                                         py: 2.5,
-                                        backgroundColor: selectedType === 'backlog' && showTable ? 'rgba(59, 130, 246, 0.08)' : '#fff',
-                                        color: selectedType === 'backlog' && showTable ? '#2563eb' : '#64748b',
-                                        fontWeight: 600,
-                                        fontSize: '0.813rem',
+                                        backgroundColor: selectedType === 'backlog' && showTable ? 'rgba(25, 118, 210, 0.08)' : 'transparent',
+                                        color: selectedType === 'backlog' && showTable ? '#1976d2' : 'rgba(25, 118, 210, 0.7)',
+                                        fontWeight: 500,
+                                        fontSize: '0.875rem',
                                         letterSpacing: '0.3px',
                                         cursor: 'pointer',
                                         transition: 'all 0.2s ease',
-                                        borderLeft: selectedType === 'backlog' && showTable ? '3px solid #2563eb' : '3px solid transparent',
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: 2,
                                         '&:hover': {
-                                            backgroundColor: 'rgba(59, 130, 246, 0.04)',
-                                            color: '#2563eb'
+                                            backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                                            color: '#1976d2'
                                         }
                                     }}
                                 >
@@ -607,20 +1110,19 @@ const ProjectDetails = () => {
                                     sx={{
                                         px: 3,
                                         py: 2.5,
-                                        backgroundColor: selectedType === 'sprint' && showTable ? 'rgba(59, 130, 246, 0.08)' : '#fff',
-                                        color: selectedType === 'sprint' && showTable ? '#2563eb' : '#64748b',
-                                        fontWeight: 600,
-                                        fontSize: '0.813rem',
+                                        backgroundColor: selectedType === 'sprint' && showTable ? 'rgba(25, 118, 210, 0.08)' : 'transparent',
+                                        color: selectedType === 'sprint' && showTable ? '#1976d2' : 'rgba(25, 118, 210, 0.7)',
+                                        fontWeight: 500,
+                                        fontSize: '0.875rem',
                                         letterSpacing: '0.3px',
                                         cursor: 'pointer',
                                         transition: 'all 0.2s ease',
-                                        borderLeft: selectedType === 'sprint' && showTable ? '3px solid #2563eb' : '3px solid transparent',
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: 2,
                                         '&:hover': {
-                                            backgroundColor: 'rgba(59, 130, 246, 0.04)',
-                                            color: '#2563eb'
+                                            backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                                            color: '#1976d2'
                                         }
                                     }}
                                 >
@@ -636,21 +1138,104 @@ const ProjectDetails = () => {
                             </Box>
                         )}
                     </Box>
+                </Box>
 
-                    {/* Right side - Content */}
-                    <Box sx={{ 
+                {/* Right side - Content Area */}
+                <Box 
+                    component="main"
+                    sx={{ 
                         flex: 1,
-                        backgroundColor: '#f8fafc',
-                        overflow: 'auto',
+                        ml: '240px',
                         display: 'flex',
-                        flexDirection: 'column'
-                    }}>
-                        <Box sx={{
-                            flex: 1,
-                            p: 4,
-                            minHeight: '100%'
-                        }}>
-                            {showTable ? renderTable() : renderMainContent()}
+                        flexDirection: 'column',
+                        minHeight: '100vh',
+                        position: 'relative'
+                    }}
+                >
+                    <Box
+                        sx={{
+                            position: 'fixed',
+                            top: 128,
+                            left: '240px',
+                            right: 0,
+                            bottom: 0,
+                            backgroundColor: '#fff',
+                            borderTop: '1px solid rgba(0, 0, 0, 0.12)',
+                            borderLeft: '1px solid rgba(0, 0, 0, 0.12)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            zIndex: 1
+                        }}
+                    >
+                        <Box
+                            sx={{
+                                flex: 1,
+                                overflow: 'auto',
+                                padding: '24px',
+                                boxShadow: 'inset 0 4px 8px rgba(0,0,0,0.05)',
+                            }}
+                        >
+                            {selectedType === 'epic' && !selectedItem && (
+                                <Box sx={{ 
+                                    mb: 3, 
+                                    display: 'flex', 
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}>
+                                    <ToggleButtonGroup
+                                        value={epicViewMode}
+                                        exclusive
+                                        onChange={handleEpicViewChange}
+                                        size="small"
+                                        sx={{ 
+                                            '& .MuiToggleButton-root.Mui-selected': {
+                                                backgroundColor: '#1976d2',
+                                                color: 'white',
+                                                '&:hover': {
+                                                    backgroundColor: '#1565c0'
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <ToggleButton value="table" aria-label="table view">
+                                            <TableViewIcon />
+                                        </ToggleButton>
+                                        <ToggleButton value="card" aria-label="card view">
+                                            <ViewModuleIcon />
+                                        </ToggleButton>
+                                    </ToggleButtonGroup>
+                                    <Button
+                                        variant="contained"
+                                        color="primary"
+                                        onClick={handleOpenAddEpicDialog}
+                                        startIcon={<AddIcon />}
+                                        sx={{
+                                            borderRadius: '8px',
+                                            textTransform: 'none',
+                                            fontWeight: 600
+                                        }}
+                                    >
+                                        Create Epic
+                                    </Button>
+                                </Box>
+                            )}
+                            {selectedType === 'epic' ? (
+                                selectedItem ? (
+                                    renderMainContent()
+                                ) : (
+                                    epicViewMode === 'table' ? renderEpicTable() : renderEpicCards()
+                                )
+                            ) : (
+                                showTable ? renderTable() : renderMainContent()
+                            )}
+                            
+                            {/* Add Epic Dialog */}
+                            <AddEpic
+                                open={openAddEpicDialog}
+                                onClose={handleCloseAddEpicDialog}
+                                projectId={id}
+                                onEpicAdded={handleEpicAdded}
+                            />
                         </Box>
                     </Box>
                 </Box>
