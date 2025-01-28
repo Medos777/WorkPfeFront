@@ -10,6 +10,9 @@ import {
     InputLabel,
     Select,
     MenuItem,
+    Grid,
+    useTheme,
+    useMediaQuery,
     Box,
     Alert,
     CircularProgress
@@ -18,6 +21,9 @@ import epicService from '../service/EpicService';
 import projectService from '../service/ProjectService';
 
 const AddEpic = ({ open, onClose, projectId: initialProjectId, userId }) => {
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
@@ -136,6 +142,7 @@ const AddEpic = ({ open, onClose, projectId: initialProjectId, userId }) => {
         <Dialog 
             open={open} 
             onClose={handleClose}
+            fullScreen={isMobile}
             maxWidth="sm"
             fullWidth
         >
@@ -152,103 +159,121 @@ const AddEpic = ({ open, onClose, projectId: initialProjectId, userId }) => {
                             {success}
                         </Alert>
                     )}
-
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <TextField
-                            name="name"
-                            label="Epic Name"
-                            value={epicData.name}
-                            onChange={handleChange}
-                            required
-                            fullWidth
-                        />
-
-                        <TextField
-                            name="description"
-                            label="Description"
-                            value={epicData.description}
-                            onChange={handleChange}
-                            multiline
-                            rows={4}
-                            fullWidth
-                        />
-
-                        <FormControl fullWidth>
-                            <InputLabel>Project (Optional)</InputLabel>
-                            <Select
-                                name="project"
-                                value={epicData.project || ''}
+                    <Grid container spacing={2}>
+                        <Grid item xs={12}>
+                            <TextField
+                                name="name"
+                                label="Epic Name"
+                                value={epicData.name}
                                 onChange={handleChange}
-                                label="Project (Optional)"
-                            >
-                                <MenuItem value="">
-                                    <em>None</em>
-                                </MenuItem>
-                                {projects.map((project) => (
-                                    <MenuItem key={project._id} value={project._id}>
-                                        {project.projectName}
+                                fullWidth
+                                required
+                                size={isMobile ? "small" : "medium"}
+                            />
+                        </Grid>
+                        <Grid item xs={12}>
+                            <TextField
+                                name="description"
+                                label="Description"
+                                value={epicData.description}
+                                onChange={handleChange}
+                                fullWidth
+                                multiline
+                                rows={3}
+                                size={isMobile ? "small" : "medium"}
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth size={isMobile ? "small" : "medium"}>
+                                <InputLabel>Project (Optional)</InputLabel>
+                                <Select
+                                    name="project"
+                                    value={epicData.project || ''}
+                                    onChange={handleChange}
+                                    label="Project (Optional)"
+                                >
+                                    <MenuItem value="">
+                                        <em>None</em>
                                     </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-
-                        <FormControl fullWidth>
-                            <InputLabel>Status</InputLabel>
-                            <Select
-                                name="status"
-                                value={epicData.status}
+                                    {projects.map((project) => (
+                                        <MenuItem key={project._id} value={project._id}>
+                                            {project.projectName}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth size={isMobile ? "small" : "medium"}>
+                                <InputLabel>Status</InputLabel>
+                                <Select
+                                    name="status"
+                                    value={epicData.status}
+                                    onChange={handleChange}
+                                    label="Status"
+                                >
+                                    <MenuItem value="to do">To Do</MenuItem>
+                                    <MenuItem value="in progress">In Progress</MenuItem>
+                                    <MenuItem value="done">Done</MenuItem>
+                                </Select>
+                            </FormControl>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <FormControl fullWidth size={isMobile ? "small" : "medium"}>
+                                <InputLabel>Priority</InputLabel>
+                                <Select
+                                    name="priority"
+                                    value={epicData.priority}
+                                    onChange={handleChange}
+                                    label="Priority"
+                                >
+                                    <MenuItem value="highest">Highest</MenuItem>
+                                    <MenuItem value="high">High</MenuItem>
+                                    <MenuItem value="medium">Medium</MenuItem>
+                                    <MenuItem value="low">Low</MenuItem>
+                                    <MenuItem value="lowest">Lowest</MenuItem>
+                                </Select>
+                            </FormControl>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                name="startDate"
+                                label="Start Date"
+                                type="date"
+                                value={epicData.startDate}
                                 onChange={handleChange}
-                                label="Status"
-                            >
-                                <MenuItem value="to do">To Do</MenuItem>
-                                <MenuItem value="in progress">In Progress</MenuItem>
-                                <MenuItem value="done">Done</MenuItem>
-                            </Select>
-                        </FormControl>
-
-                        <FormControl fullWidth>
-                            <InputLabel>Priority</InputLabel>
-                            <Select
-                                name="priority"
-                                value={epicData.priority}
+                                fullWidth
+                                size={isMobile ? "small" : "medium"}
+                                InputLabelProps={{ shrink: true }}
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                name="dueDate"
+                                label="Due Date"
+                                type="date"
+                                value={epicData.dueDate}
                                 onChange={handleChange}
-                                label="Priority"
-                            >
-                                <MenuItem value="highest">Highest</MenuItem>
-                                <MenuItem value="high">High</MenuItem>
-                                <MenuItem value="medium">Medium</MenuItem>
-                                <MenuItem value="low">Low</MenuItem>
-                                <MenuItem value="lowest">Lowest</MenuItem>
-                            </Select>
-                        </FormControl>
-
-                        <TextField
-                            name="startDate"
-                            label="Start Date"
-                            type="date"
-                            value={epicData.startDate}
-                            onChange={handleChange}
-                            fullWidth
-                            InputLabelProps={{ shrink: true }}
-                        />
-
-                        <TextField
-                            name="dueDate"
-                            label="Due Date"
-                            type="date"
-                            value={epicData.dueDate}
-                            onChange={handleChange}
-                            fullWidth
-                            InputLabelProps={{ shrink: true }}
-                        />
-                    </Box>
+                                fullWidth
+                                size={isMobile ? "small" : "medium"}
+                                InputLabelProps={{ shrink: true }}
+                            />
+                        </Grid>
+                    </Grid>
                 </DialogContent>
-
-                <DialogActions>
-                    <Button onClick={handleClose}>Cancel</Button>
+                <DialogActions sx={{ p: theme.spacing(2) }}>
+                    <Button 
+                        onClick={handleClose}
+                        size={isMobile ? "small" : "medium"}
+                        fullWidth={isMobile}
+                    >
+                        Cancel
+                    </Button>
                     <Button 
                         type="submit" 
                         variant="contained"
+                        size={isMobile ? "small" : "medium"}
+                        fullWidth={isMobile}
                         disabled={loading}
                         sx={{
                             backgroundColor: '#0052CC',

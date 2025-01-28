@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     AppBar,
     Toolbar,
@@ -58,6 +58,7 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
     const socket = React.useRef(null);
     const [analyticsMenuAnchor, setAnalyticsMenuAnchor] = useState(null);
     const [projectType, setProjectType] = useState(localStorage.getItem('projectType'));
+    const [userRole, setUserRole] = useState(localStorage.getItem('role'));
 
     useEffect(() => {
         socket.current = io('http://localhost:3001');
@@ -96,6 +97,9 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
         const handleStorageChange = (e) => {
             if (e.key === 'projectType') {
                 setProjectType(e.newValue);
+            }
+            if (e.key === 'role') {
+                setUserRole(e.newValue);
             }
         };
 
@@ -150,27 +154,60 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
         setAnalyticsMenuAnchor(null);
     };
 
-    const menuItems = [
-        { label: 'Home', path: '/', icon: <Home /> },
-        { label: 'Projects', path: '/projects', icon: <Dashboard /> },
-        { label: 'Teams', path: '/team', icon: <Group /> },
-        ...(projectType !== 'Kanban' ? [
-            { label: 'Backlog', path: '/backlog', icon: <AutoStories /> },
-            { label: 'Sprints', path: '/sprints', icon: <Timeline /> },
-        ] : []),
-        { label: 'Issues', path: '/issues', icon: <BugReportOutlined /> },
-        { 
-            label: 'Analytics', 
-            path: '/analytics', 
-            icon: <BarChart />,
-            subItems: [
-                { label: 'Project Analytics', path: '/projects/analytics', icon: <AssessmentOutlined /> },
-                { label: 'Team Performance', path: '/teams/analytics', icon: <PeopleAlt /> },
-                { label: 'Reports', path: '/reports', icon: <CloudDownloadOutlined /> },
-            ]
-        },
-        { label: 'Epics', path: '/epics', icon: <FlagOutlined /> },
-    ];
+    const menuItems = useMemo(() => {
+        const baseItems = [
+            { label: 'Home', path: '/', icon: <Home /> },
+            { label: 'Projects', path: '/projects', icon: <Dashboard /> },
+        ];
+
+        if (userRole === 'developer') {
+            return [
+                ...baseItems,
+                { label: 'Epics', path: '/epics', icon: <FlagOutlined /> },
+                ...(projectType !== 'Kanban' ? [
+                    { label: 'Backlog', path: '/backlog', icon: <AutoStories /> },
+                    { label: 'Sprints', path: '/sprints', icon: <Timeline /> },
+                ] : []),
+                { label: 'Issues', path: '/issues', icon: <BugReportOutlined /> },
+            ];
+        } else if (userRole === 'admin') {
+            return [
+                ...baseItems,
+                { label: 'Teams', path: '/team', icon: <Group /> },
+                { 
+                    label: 'Analytics', 
+                    path: '/analytics', 
+                    icon: <BarChart />,
+                    subItems: [
+                        { label: 'Project Analytics', path: '/projects/analytics', icon: <AssessmentOutlined /> },
+                        { label: 'Team Performance', path: '/teams/analytics', icon: <PeopleAlt /> },
+                        { label: 'Reports', path: '/reports', icon: <CloudDownloadOutlined /> },
+                    ]
+                },
+            ];
+        } else {
+            return [
+                ...baseItems,
+                { label: 'Teams', path: '/team', icon: <Group /> },
+                ...(projectType !== 'Kanban' ? [
+                    { label: 'Backlog', path: '/backlog', icon: <AutoStories /> },
+                    { label: 'Sprints', path: '/sprints', icon: <Timeline /> },
+                ] : []),
+                { label: 'Issues', path: '/issues', icon: <BugReportOutlined /> },
+                { 
+                    label: 'Analytics', 
+                    path: '/analytics', 
+                    icon: <BarChart />,
+                    subItems: [
+                        { label: 'Project Analytics', path: '/projects/analytics', icon: <AssessmentOutlined /> },
+                        { label: 'Team Performance', path: '/teams/analytics', icon: <PeopleAlt /> },
+                        { label: 'Reports', path: '/reports', icon: <CloudDownloadOutlined /> },
+                    ]
+                },
+                { label: 'Epics', path: '/epics', icon: <FlagOutlined /> },
+            ];
+        }
+    }, [userRole, projectType]);
 
     const handleLogout = () => {
         logout();
