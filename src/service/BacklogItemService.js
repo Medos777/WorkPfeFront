@@ -19,5 +19,8 @@ const update = (BacklogsId, BacklogsData) => {
 const deleteBacklogItems = (BacklogsId) => {
     return httpClient.delete(`/BacklogItems/${BacklogsId}`);
 };
+const findByUser= userId => {
+    return httpClient.get(`/BacklogItems/user/${userId}`);
 
-export default { getAll, create, deleteBacklogItems, getBacklogItems, update };
+};
+export default { getAll, create, deleteBacklogItems, getBacklogItems, update ,findByUser};

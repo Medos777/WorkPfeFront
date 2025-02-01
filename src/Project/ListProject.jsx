@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ProjectService from "../service/ProjectService";
+import TeamService from "../service/TeamService";
 import {
     Table,
     TableBody,
@@ -69,18 +70,43 @@ const ListProject = () => {
     });
 
     useEffect(() => {
-        retrieveProjects();
-    }, []);
+        const fetchProjects = async () => {
+            try {
+                const role = localStorage.getItem('role');
+                const userId = localStorage.getItem('id');
 
-    const retrieveProjects = () => {
-        ProjectService.getAll()
-            .then((response) => {
-                setProjects(response.data);
-            })
-            .catch((e) => {
-                console.error("Error retrieving projects:", e);
-            });
-    };
+                if (role === 'developer') {
+                    // Get all projects first
+                    const projectsResponse = await ProjectService.getAll();
+                    const allProjects = projectsResponse.data;
+                    
+                    // Filter projects based on team membership
+                    const userProjects = [];
+                    for (const project of allProjects) {
+                        if (project.teams) {
+                            for (const team of project.teams) {
+                                const teamResponse = await TeamService.getTeam(team.id);
+                                const teamData = teamResponse.data;
+                                if (teamData.members && teamData.members.some(member => member.id === userId)) {
+                                    userProjects.push(project);
+                                    break; // Break once we find one team the user is part of
+                                }
+                            }
+                        }
+                    }
+                    setProjects(userProjects);
+                } else {
+                    // For managers, show all projects
+                    const response = await ProjectService.getAll();
+                    setProjects(response.data);
+                }
+            } catch (error) {
+                console.error('Error fetching projects:', error);
+            }
+        };
+
+        fetchProjects();
+    }, []);
 
     const handleChangePage = (event, newPage) => {
         setPage(newPage);
@@ -161,7 +187,7 @@ const ListProject = () => {
         if (projectToDelete) {
             ProjectService.remove(projectToDelete.id)
                 .then(() => {
-                    retrieveProjects();
+                    setProjects(projects.filter(project => project.id !== projectToDelete.id));
                     setDeleteDialogOpen(false);
                     setProjectToDelete(null);
                 })

@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import loginservice from "../service/LoginService";
+import TeamService from "../service/TeamService";
 import { toast, ToastContainer } from "react-toastify";
 import { jwtDecode } from "jwt-decode";
 import logo from '../assets/logo.svg';
@@ -57,7 +58,20 @@ export default function Login() {
                 localStorage.setItem("userId", userId);
                 localStorage.setItem("role", role);
                 setUserId(userId);
-                navigate('/dashboard');
+
+                // Fetch user's teams after successful login
+                TeamService.getAll()
+                    .then((teamsResponse) => {
+                        const userTeams = teamsResponse.data.filter(team => 
+                            team.members && team.members.some(member => member._id === userId)
+                        );
+                        localStorage.setItem("userTeams", JSON.stringify(userTeams.map(team => team._id)));
+                        navigate('/dashboard');
+                    })
+                    .catch((error) => {
+                        console.error("Error fetching teams:", error);
+                        navigate('/dashboard');
+                    });
             })
             .catch((error) => {
                 console.error("Login error:", error);

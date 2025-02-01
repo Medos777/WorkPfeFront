@@ -4,6 +4,7 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Layout from './Menu/Layout';
 import AuthGuard from "./Auth/AuthGuard";
+import UserDetails from './login/UserDetailes';
 
 const Login = lazy(() => import('./login/Login'));
 const SignUp = lazy(() => import('./login/SignUp'));
@@ -185,6 +186,14 @@ function App() {
                                 element={
                                     <AuthGuard isLoggedIn={isLoggedIn}>
                                         <AddIssue />
+                                    </AuthGuard>
+                                }
+                            />
+                            <Route
+                                path="/user/details"
+                                element={
+                                    <AuthGuard isLoggedIn={isLoggedIn}>
+                                        <UserDetails />
                                     </AuthGuard>
                                 }
                             />

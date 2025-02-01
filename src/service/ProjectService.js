@@ -71,6 +71,12 @@ const getProjectAnalytics = projectId => {
 const getProjectPerformance = projectId => {
     return httpClient.get(`/projects/${projectId}/performance`);
 };
+const findByTeams = teamId => {
+    return httpClient.get(`/projects/teams/${teamId}`);
+    
+    
+};
+
 
 export default {
     getAll,
@@ -89,5 +95,6 @@ export default {
     exportProjectReport,
     scheduleReport,
     getProjectAnalytics,
-    getProjectById
+    getProjectById,
+    findByTeams
 };

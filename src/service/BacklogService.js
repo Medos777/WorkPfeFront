@@ -22,6 +22,10 @@ const update = (id, data) => {
 const remove = id => {
     return httpClient.delete(`/Backlogs/${id}`);
 };
+const findByUser= userId => {
+    return httpClient.get(`/Backlogs/user/${userId}`);
+    
+};
 
 export default {
     getAll,
@@ -29,5 +33,6 @@ export default {
     getByProject,
     create,
     update,
-    remove
+    remove,
+    findByUser
 };

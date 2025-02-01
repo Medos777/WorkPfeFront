@@ -184,7 +184,247 @@ const EpicList = () => {
                 console.error('Error decoding token:', err);
             }
         }
+
+        // Charger les commentaires depuis les cookies
+        const savedComments = cookieUtils.getCookie('epicComments');
+        if (savedComments) {
+            const migratedComments = Object.keys(savedComments).reduce((acc, epicId) => {
+                acc[epicId] = savedComments[epicId].map(comment => ({
+                    id: comment.id || Date.now().toString(),
+                    text: comment.text,
+                    timestamp: comment.timestamp,
+                    likes: comment.likes || 0,
+                    likedBy: comment.likedBy || [],
+                    replies: (comment.replies || []).map(reply => ({
+                        id: reply.id || Date.now().toString(),
+                        text: reply.text,
+                        timestamp: reply.timestamp,
+                        likes: reply.likes || 0,
+                        likedBy: reply.likedBy || [],
+                        replies: []
+                    })),
+                    username: comment.username || 'Anonymous'
+                }));
+                return acc;
+            }, {});
+            setComments(migratedComments);
+            cookieUtils.setCookie('epicComments', migratedComments);
+        }
     }, []);
+
+    // Fonctions pour la gestion des commentaires
+    const handleCommentChange = (epicId, value, commentId = null) => {
+        if (commentId) {
+            setReplyingTo(prev => ({
+                ...prev,
+                [commentId]: value
+            }));
+        } else {
+            setNewComments(prev => ({
+                ...prev,
+                [epicId]: value
+            }));
+        }
+    };
+
+    const handleAddComment = async (epicId, parentCommentId = null) => {
+        const commentText = parentCommentId ? replyingTo[parentCommentId] : newComments[epicId];
+        if (!commentText?.trim() || !currentUser) return;
+
+        setCommentLoading(prev => ({
+            ...prev,
+            [parentCommentId || epicId]: true
+        }));
+
+        const newComment = {
+            id: Date.now().toString(),
+            text: commentText,
+            timestamp: new Date().toISOString(),
+            likes: 0,
+            likedBy: [],
+            replies: [],
+            username: currentUser.username
+        };
+
+        try {
+            const updatedComments = { ...comments };
+
+            if (parentCommentId) {
+                const parentComment = findCommentById(updatedComments[epicId], parentCommentId);
+                if (parentComment) {
+                    parentComment.replies = [...(parentComment.replies || []), newComment];
+                }
+                setReplyingTo(prev => ({
+                    ...prev,
+                    [parentCommentId]: ''
+                }));
+            } else {
+                updatedComments[epicId] = [...(updatedComments[epicId] || []), newComment];
+                setNewComments(prev => ({
+                    ...prev,
+                    [epicId]: ''
+                }));
+            }
+
+            setComments(updatedComments);
+            cookieUtils.setCookie('epicComments', updatedComments);
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+        } finally {
+            setCommentLoading(prev => ({
+                ...prev,
+                [parentCommentId || epicId]: false
+            }));
+        }
+    };
+
+    const handleLike = async (epicId, commentId) => {
+        setLikeLoading(prev => ({
+            ...prev,
+            [commentId]: true
+        }));
+
+        try {
+            const updatedComments = { ...comments };
+            const comment = findCommentById(updatedComments[epicId], commentId);
+            
+            if (comment) {
+                const userId = currentUser?.id || 'anonymous';
+                const likedIndex = (comment.likedBy || []).indexOf(userId);
+                
+                if (likedIndex === -1) {
+                    comment.likedBy = [...(comment.likedBy || []), userId];
+                    comment.likes = (comment.likes || 0) + 1;
+                } else {
+                    comment.likedBy.splice(likedIndex, 1);
+                    comment.likes = Math.max(0, (comment.likes || 1) - 1);
+                }
+                
+                setComments(updatedComments);
+                cookieUtils.setCookie('epicComments', updatedComments);
+                
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+        } finally {
+            setLikeLoading(prev => ({
+                ...prev,
+                [commentId]: false
+            }));
+        }
+    };
+
+    const findCommentById = (comments = [], commentId) => {
+        for (const comment of comments) {
+            if (comment.id === commentId) return comment;
+            if (comment.replies) {
+                const found = findCommentById(comment.replies, commentId);
+                if (found) return found;
+            }
+        }
+        return null;
+    };
+
+    const toggleReplies = (commentId) => {
+        setExpandedComments(prev => ({
+            ...prev,
+            [commentId]: !prev[commentId]
+        }));
+    };
+
+    // Ajout du rendu des commentaires dans la section des commentaires de chaque epic
+    const renderCommentSection = (epic) => (
+        <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle1" gutterBottom>
+                Comments
+            </Typography>
+            <Box>
+                {(comments[epic._id] || []).map(comment => (
+                    <Box key={comment.id} sx={{ mb: 2 }}>
+                        <Paper sx={{ p: 2 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="subtitle2">{comment.username}</Typography>
+                                <Typography variant="caption" sx={{ ml: 1 }}>
+                                    {new Date(comment.timestamp).toLocaleString()}
+                                </Typography>
+                            </Box>
+                            <Typography>{comment.text}</Typography>
+                            <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                                <Button
+                                    size="small"
+                                    startIcon={comment.likedBy?.includes(currentUser?.id) ? 
+                                        <FavoriteIcon color="error" /> : 
+                                        <FavoriteBorderIcon />
+                                    }
+                                    onClick={() => handleLike(epic._id, comment.id)}
+                                >
+                                    {comment.likes || 0} Likes
+                                </Button>
+                                <Button
+                                    size="small"
+                                    startIcon={<ReplyIcon />}
+                                    onClick={() => toggleReplies(comment.id)}
+                                >
+                                    Reply
+                                </Button>
+                            </Box>
+                            
+                            <Collapse in={expandedComments[comment.id]}>
+                                <Box sx={{ ml: 3, mt: 2 }}>
+                                    {comment.replies?.map(reply => (
+                                        <Paper key={reply.id} sx={{ p: 2, mb: 1, bgcolor: 'grey.50' }}>
+                                            <Typography variant="subtitle2">{reply.username}</Typography>
+                                            <Typography>{reply.text}</Typography>
+                                        </Paper>
+                                    ))}
+                                    <TextField
+                                        fullWidth
+                                        size="small"
+                                        placeholder="Write a reply..."
+                                        value={replyingTo[comment.id] || ''}
+                                        onChange={(e) => handleCommentChange(epic._id, e.target.value, comment.id)}
+                                        sx={{ mt: 1 }}
+                                        InputProps={{
+                                            endAdornment: (
+                                                <InputAdornment position="end">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => handleAddComment(epic._id, comment.id)}
+                                                        disabled={!replyingTo[comment.id]?.trim()}
+                                                    >
+                                                        <SendIcon />
+                                                    </IconButton>
+                                                </InputAdornment>
+                                            )
+                                        }}
+                                    />
+                                </Box>
+                            </Collapse>
+                        </Paper>
+                    </Box>
+                ))}
+                
+                <TextField
+                    fullWidth
+                    placeholder="Write a comment..."
+                    value={newComments[epic._id] || ''}
+                    onChange={(e) => handleCommentChange(epic._id, e.target.value)}
+                    sx={{ mt: 2 }}
+                    InputProps={{
+                        endAdornment: (
+                            <InputAdornment position="end">
+                                <IconButton
+                                    onClick={() => handleAddComment(epic._id)}
+                                    disabled={!newComments[epic._id]?.trim()}
+                                >
+                                    <SendIcon />
+                                </IconButton>
+                            </InputAdornment>
+                        )
+                    }}
+                />
+            </Box>
+        </Box>
+    );
 
     const loadEpics = async () => {
         try {
@@ -262,181 +502,6 @@ const EpicList = () => {
                 return '#42526E';
         }
     };
-
-    const handleCommentChange = (epicId, value, commentId = null) => {
-        if (commentId) {
-            setReplyingTo(prev => ({
-                ...prev,
-                [commentId]: value
-            }));
-        } else {
-            setNewComments(prev => ({
-                ...prev,
-                [epicId]: value
-            }));
-        }
-    };
-
-    const handleAddComment = async (epicId, parentCommentId = null) => {
-        const commentText = parentCommentId ? replyingTo[parentCommentId] : newComments[epicId];
-        if (!commentText?.trim() || !currentUser) return;
-
-        setCommentLoading(prev => ({
-            ...prev,
-            [parentCommentId || epicId]: true
-        }));
-
-        const newComment = {
-            id: Date.now().toString(),
-            text: commentText,
-            timestamp: new Date().toISOString(),
-            likes: 0,
-            likedBy: [],
-            replies: [],
-            username: currentUser.username, // This will now be the UserEmail
-        };
-
-        try {
-            const updatedComments = { ...comments };
-
-            if (parentCommentId) {
-                const parentComment = findCommentById(updatedComments[epicId], parentCommentId);
-                if (parentComment) {
-                    parentComment.replies = [...(parentComment.replies || []), newComment];
-                }
-                setReplyingTo(prev => ({
-                    ...prev,
-                    [parentCommentId]: ''
-                }));
-            } else {
-                updatedComments[epicId] = [...(updatedComments[epicId] || []), newComment];
-                setNewComments(prev => ({
-                    ...prev,
-                    [epicId]: ''
-                }));
-            }
-
-            setComments(updatedComments);
-            cookieUtils.setCookie('epicComments', updatedComments);
-            
-            // Simulate network delay for smooth animation
-            await new Promise(resolve => setTimeout(resolve, 500));
-        } finally {
-            setCommentLoading(prev => ({
-                ...prev,
-                [parentCommentId || epicId]: false
-            }));
-        }
-    };
-
-    const handleLike = async (epicId, commentId) => {
-        setLikeLoading(prev => ({
-            ...prev,
-            [commentId]: true
-        }));
-
-        try {
-            const updatedComments = { ...comments };
-            const comment = findCommentById(updatedComments[epicId], commentId);
-            
-            if (comment) {
-                const userId = 'current-user';
-                const likedIndex = (comment.likedBy || []).indexOf(userId);
-                
-                if (likedIndex === -1) {
-                    comment.likedBy.push(userId);
-                    comment.likes++;
-                } else {
-                    comment.likedBy.splice(likedIndex, 1);
-                    comment.likes--;
-                }
-                
-                setComments(updatedComments);
-                cookieUtils.setCookie('epicComments', updatedComments);
-                
-                // Simulate network delay for smooth animation
-                await new Promise(resolve => setTimeout(resolve, 300));
-            }
-        } finally {
-            setLikeLoading(prev => ({
-                ...prev,
-                [commentId]: false
-            }));
-        }
-    };
-
-    const findCommentById = (comments = [], commentId) => {
-        for (const comment of comments) {
-            if (comment.id === commentId) return comment;
-            if (comment.replies) {
-                const found = findCommentById(comment.replies, commentId);
-                if (found) return found;
-            }
-        }
-        return null;
-    };
-
-    const toggleReplies = (commentId) => {
-        setExpandedComments(prev => ({
-            ...prev,
-            [commentId]: !prev[commentId]
-        }));
-    };
-
-    // Fonction de rendu des commentaires
-    const renderComment = (comment, epicId) => (
-        <Zoom in={true} key={comment.id}>
-            <Box sx={{ mb: 2 }}>
-                <Paper 
-                    elevation={0}
-                    sx={{ 
-                        p: 2,
-                        backgroundColor: 'rgba(0, 0, 0, 0.02)',
-                        position: 'relative'
-                    }}
-                >
-                    {/* Contenu du commentaire */}
-                    <Typography variant="body2">
-                        {comment.text}
-                    </Typography>
-                    
-                    {/* Actions du commentaire */}
-                    <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
-                        <Button
-                            size="small"
-                            onClick={() => handleLikeComment(epicId, comment.id)}
-                            disabled={likeLoading[`${epicId}-${comment.id}`]}
-                            startIcon={
-                                comment.likedBy?.includes(currentUser?.id) ? 
-                                <FavoriteIcon color="error" /> : 
-                                <FavoriteBorderIcon />
-                            }
-                        >
-                            {comment.likes || 0} Likes
-                        </Button>
-                        
-                        <Button
-                            size="small"
-                            onClick={() => handleReplyClick(epicId, comment.id)}
-                            startIcon={<ReplyIcon />}
-                        >
-                            Reply
-                        </Button>
-                        
-                        {comment.replies?.length > 0 && (
-                            <Button
-                                size="small"
-                                onClick={() => toggleCommentExpansion(epicId, comment.id)}
-                                endIcon={expandedComments[`${epicId}-${comment.id}`] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                            >
-                                Show {comment.replies.length} {comment.replies.length === 1 ? 'reply' : 'replies'}
-                            </Button>
-                        )}
-                    </Box>
-                </Paper>
-            </Box>
-        </Zoom>
-    );
 
     // Filtrer les epics selon la recherche et les filtres
     const filteredEpics = epics.filter(epic => {
@@ -610,6 +675,9 @@ const EpicList = () => {
                                         </Box>
                                     </Box>
                                 )}
+
+                                {/* Commentaires */}
+                                {renderCommentSection(epic)}
 
                                 {/* Actions */}
                                 {localStorage.getItem('role') === 'manager' && (

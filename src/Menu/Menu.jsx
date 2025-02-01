@@ -175,6 +175,7 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
             return [
                 ...baseItems,
                 { label: 'Teams', path: '/team', icon: <Group /> },
+                { label: 'User Management', path: '/user/details', icon: <PeopleAlt /> },
                 { 
                     label: 'Analytics', 
                     path: '/analytics', 
