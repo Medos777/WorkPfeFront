@@ -70,6 +70,11 @@ const removeWatcher = (epicId, userId) => {
     });
 };
 
+const updateEpicStatus = (epicId, statusData) => {
+    const transformedData = transformEpicData(statusData);
+    return httpClient.put(`/epics/${epicId}`, transformedData);
+};
+
 const EpicService = {
     getAll,
     getById,
@@ -79,7 +84,8 @@ const EpicService = {
     remove,
     updateProgress,
     addWatcher,
-    removeWatcher
+    removeWatcher,
+    updateEpicStatus
 };
 
 export default EpicService;

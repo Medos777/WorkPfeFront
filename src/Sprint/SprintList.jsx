@@ -108,7 +108,7 @@ const SprintList = () => {
     const [selectedSprint, setSelectedSprint] = useState(null);
     const [anchorEl, setAnchorEl] = useState(null);
     const [newSprint, setNewSprint] = useState({
-        sprintName: '',
+        name: '',
         startDate: '',
         endDate: '',
         goal: '',
@@ -151,7 +151,7 @@ const SprintList = () => {
 
     const handleEditClick = () => {
         setNewSprint({
-            sprintName: selectedSprint.sprintName,
+            name: selectedSprint.name,
             startDate: selectedSprint.startDate.split('T')[0],
             endDate: selectedSprint.endDate.split('T')[0],
             goal: selectedSprint.goal,
@@ -191,14 +191,14 @@ const SprintList = () => {
 
     // Existing handlers
     const handleAddSprint = async () => {
-        if (!newSprint.sprintName || !newSprint.startDate || !newSprint.endDate || !newSprint.project) {
+        if (!newSprint.name || !newSprint.startDate || !newSprint.endDate || !newSprint.project) {
             setError('Please fill in all required fields.');
             return;
         }
         try {
             await sprintService.create(newSprint);
             setNewSprint({
-                sprintName: '',
+                name: '',
                 startDate: '',
                 endDate: '',
                 goal: '',
@@ -304,19 +304,23 @@ const SprintList = () => {
             ) : (
                 sprints.map((sprint) => (
                     <StyledAccordion key={sprint._id}>
-                        <StyledAccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-                                <Typography variant="h6" sx={{ fontWeight: 'bold', mr: 2 }}>
-                                    {sprint.sprintName}
-                                </Typography>
-                                <Typography variant="body2" sx={{ color: 'text.secondary', mr: 2 }}>
-                                    {`${formatDate(sprint.startDate)} - ${formatDate(sprint.endDate)}`}
-                                </Typography>
-                                <StyledChip
-                                    label={getSprintStatus(sprint)}
-                                    status={getSprintStatus(sprint)}
-                                    size="small"
-                                />
+                        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                            <Box sx={{ flexGrow: 1 }}>
+                                <StyledAccordionSummary expandIcon={<ExpandMoreIcon />}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+                                        <Typography variant="h6" sx={{ fontWeight: 'bold', mr: 2 }}>
+                                            {sprint.name}
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ color: 'text.secondary', mr: 2 }}>
+                                            {`${formatDate(sprint.startDate)} - ${formatDate(sprint.endDate)}`}
+                                        </Typography>
+                                        <StyledChip
+                                            label={getSprintStatus(sprint)}
+                                            status={getSprintStatus(sprint)}
+                                            size="small"
+                                        />
+                                    </Box>
+                                </StyledAccordionSummary>
                             </Box>
                             <ActionButton
                                 size="small"
@@ -324,10 +328,11 @@ const SprintList = () => {
                                     e.stopPropagation();
                                     handleMenuOpen(e, sprint);
                                 }}
+                                sx={{ mr: 1 }}
                             >
                                 <MoreVertIcon />
                             </ActionButton>
-                        </StyledAccordionSummary>
+                        </Box>
                         <StyledAccordionDetails>
                             <Grid container spacing={3}>
                                 <Grid item xs={12}>
@@ -386,8 +391,8 @@ const SprintList = () => {
                 <DialogContent>
                     <TextField
                         label="Sprint Name"
-                        value={newSprint.sprintName}
-                        onChange={(e) => setNewSprint({ ...newSprint, sprintName: e.target.value })}
+                        value={newSprint.name}
+                        onChange={(e) => setNewSprint({ ...newSprint, name: e.target.value })}
                         fullWidth
                         margin="normal"
                         required
@@ -471,8 +476,8 @@ const SprintList = () => {
                 <DialogContent>
                     <TextField
                         label="Sprint Name"
-                        value={newSprint.sprintName}
-                        onChange={(e) => setNewSprint({ ...newSprint, sprintName: e.target.value })}
+                        value={newSprint.name}
+                        onChange={(e) => setNewSprint({ ...newSprint, name: e.target.value })}
                         fullWidth
                         margin="normal"
                         required

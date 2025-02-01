@@ -43,6 +43,7 @@ import {
     AssessmentOutlined,
     CloudDownloadOutlined,
     FlagOutlined,
+    ExitToApp,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
@@ -210,8 +211,22 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
     }, [userRole, projectType]);
 
     const handleLogout = () => {
-        logout();
-        socket.current.disconnect();
+        // Déconnecter le socket
+        if (socket.current) {
+            socket.current.disconnect();
+        }
+        
+        // Nettoyer le localStorage
+        localStorage.clear(); // Nettoie tout le localStorage
+        // ou spécifiquement :
+        localStorage.removeItem('token');
+        localStorage.removeItem('userId');
+        localStorage.removeItem('role');
+        localStorage.removeItem('projectType');
+        localStorage.removeItem('isLoggedIn'); // Important pour le contrôle d'affichage du menu
+        
+        // Rediriger vers la page de connexion
+        navigate('/login');
     };
 
     return (
@@ -396,21 +411,12 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
                                 <ListItemText primary="Dashboard" />
                             </ListItem>
 
-                            <ListItem button component={RouterLink} to="/epics">
+                            <ListItem button onClick={handleLogout}>
                                 <ListItemIcon>
-                                    <Flag />
+                                    <ExitToApp />
                                 </ListItemIcon>
-                                <ListItemText primary="Epics" />
+                                <ListItemText primary="Logout" />
                             </ListItem>
-
-                            <ListItem button component={RouterLink} to="/add-epic">
-                                <ListItemIcon>
-                                    <BookmarkBorder />
-                                </ListItemIcon>
-                                <ListItemText primary="Create Epic" />
-                            </ListItem>
-
-                            <MenuItem onClick={handleLogout}>Logout</MenuItem>
                         </List>
                     </MuiMenu>
                 </Box>

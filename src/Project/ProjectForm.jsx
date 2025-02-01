@@ -95,7 +95,20 @@ const ProjectForm = forwardRef(({ isEdit = false, projectData = null, onSubmit, 
 
                 if (isEdit && projectId && initialLoad) {
                     const projectResponse = await ProjectService.getProject(projectId);
-                    setFormData(projectResponse.data);
+                    const projectData = projectResponse.data;
+                    
+                    // Convert user IDs to their corresponding emails
+                    const projectLeadUser = usersResponse.data.find(user => user._id === projectData.projectLead);
+                    const selectedTeams = projectData.teams.map(teamId => {
+                        const team = teamsResponse.data.find(t => t._id === teamId);
+                        return team ? team._id : null;
+                    }).filter(id => id !== null);
+
+                    setFormData({
+                        ...projectData,
+                        projectLead: projectLeadUser ? projectLeadUser._id : '',
+                        teams: selectedTeams
+                    });
                     setInitialLoad(false);
                 }
             } catch (error) {
@@ -339,19 +352,19 @@ const ProjectForm = forwardRef(({ isEdit = false, projectData = null, onSubmit, 
                             <Grid container spacing={3} sx={{ display: currentSlide === 1 ? 'flex' : 'none' }}>
                                 <Grid item xs={12}>
                                     <FormControl fullWidth>
-                                        <InputLabel id="projectLead-label">Project Lead</InputLabel>
+                                        <InputLabel id="project-lead-label">Project Lead *</InputLabel>
                                         <Select
-                                            required
-                                            labelId="projectLead-label"
+                                            labelId="project-lead-label"
                                             id="projectLead"
                                             name="projectLead"
                                             value={formData.projectLead}
                                             onChange={handleChange}
+                                            required
                                             label="Project Lead"
                                         >
                                             {users.map((user) => (
                                                 <MenuItem key={user._id} value={user._id}>
-                                                    {user.name}
+                                                    {user.email}
                                                 </MenuItem>
                                             ))}
                                         </Select>
@@ -363,16 +376,27 @@ const ProjectForm = forwardRef(({ isEdit = false, projectData = null, onSubmit, 
                                         <Select
                                             labelId="teams-label"
                                             id="teams"
+                                            name="teams"
                                             multiple
                                             value={formData.teams}
                                             onChange={handleTeamChange}
                                             label="Teams"
                                         >
-                                            {teams.map((team) => (
-                                                <MenuItem key={team._id} value={team._id}>
-                                                    {team.name}
-                                                </MenuItem>
-                                            ))}
+                                            {teams.map((team) => {
+                                                const teamMembers = team.members
+                                                    .map(memberId => users.find(u => u._id === memberId))
+                                                    .filter(member => member)
+                                                    .map(member => member.email)
+                                                    .join(', ');
+                                                
+                                                return (
+                                                    <MenuItem key={team._id} value={team._id}>
+                                                        <Tooltip title={`Members: ${teamMembers}`} arrow placement="right">
+                                                            <div>{team.name} ({teamMembers})</div>
+                                                        </Tooltip>
+                                                    </MenuItem>
+                                                );
+                                            })}
                                         </Select>
                                     </FormControl>
                                 </Grid>

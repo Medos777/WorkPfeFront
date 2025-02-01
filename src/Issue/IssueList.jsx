@@ -37,7 +37,7 @@ import {
 import { format } from 'date-fns';
 import IssueService from '../service/IssueService';
 import ProjectService from '../service/ProjectService';
-import SprintService from '../service/SprintService';
+import UserService from '../service/UserService';
 import { useNavigate, useParams } from 'react-router-dom';
 
 const priorityConfig = {
@@ -59,7 +59,8 @@ const ITEMS_PER_PAGE = 10;
 
 const IssueList = () => {
     const { projectId } = useParams();
-    const [issues, setIssues] = useState([]);
+    const [allIssues, setAllIssues] = useState([]);
+    const [filteredIssues, setFilteredIssues] = useState([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
@@ -67,43 +68,79 @@ const IssueList = () => {
     const [typeFilter, setTypeFilter] = useState('all');
     const [projectFilter, setProjectFilter] = useState(projectId || 'all');
     const [epicFilter, setEpicFilter] = useState('all');
-    const [sprintFilter, setSprintFilter] = useState('all');
     const [projects, setProjects] = useState([]);
     const [epics, setEpics] = useState([]);
-    const [sprints, setSprints] = useState([]);
+    const [users, setUsers] = useState([]);
     const [anchorEl, setAnchorEl] = useState(null);
     const [selectedIssue, setSelectedIssue] = useState(null);
     const navigate = useNavigate();
+
+    // Get user role and ID from localStorage
+    const userRole = localStorage.getItem('role');
+    const userId = localStorage.getItem('userId');
+
+    // Function to get user by ID
+    const getUserById = (userId) => {
+        return users.find(user => user._id === userId);
+    };
+
+    // Function to apply filters
+    const applyFilters = (issues) => {
+        // Si l'utilisateur est un développeur, filtrer uniquement ses issues
+        let filteredByRole = issues;
+        if (userRole === 'developer') {
+            filteredByRole = issues.filter(issue => issue.assignee === userId);
+        }
+
+        const filtered = filteredByRole.filter(issue => {
+            const matchesProject = projectFilter === 'all' || issue.projectId === projectFilter;
+            const matchesEpic = epicFilter === 'all' || issue.epicId === epicFilter;
+            const matchesType = typeFilter === 'all' || issue.type === typeFilter;
+            const matchesStatus = statusFilter === 'all' || issue.status === statusFilter;
+            const matchesSearch = !searchTerm || 
+                issue.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                issue.description.toLowerCase().includes(searchTerm.toLowerCase());
+
+            return matchesProject && matchesEpic && matchesType && matchesStatus && matchesSearch;
+        });
+
+        // Stocker les résultats filtrés dans le localStorage
+        const filteredIssuesData = {
+            timestamp: new Date().toISOString(),
+            userRole,
+            userId,
+            issues: filtered
+        };
+        localStorage.setItem('filteredIssues', JSON.stringify(filteredIssuesData));
+
+        return filtered;
+    };
 
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const [projectsRes, sprintsRes] = await Promise.all([
+                const [projectsRes, allIssuesRes, usersRes] = await Promise.all([
                     ProjectService.getAll(),
-                    SprintService.getAll()
+                    IssueService.getAll(),
+                    UserService.getAll()
                 ]);
-                setProjects(projectsRes.data);
-                setSprints(sprintsRes.data);
                 
-                // Fetch epics for the selected project
-                if (projectFilter !== 'all') {
-                    const epicsRes = await IssueService.getByProject(projectFilter);
-                    setEpics(epicsRes.data.filter(issue => issue.type === 'epic'));
-                }
-
-                // Fetch issues based on filters
-                let issuesData;
-                if (projectFilter !== 'all') {
-                    issuesData = await IssueService.getByProject(projectFilter);
-                } else if (epicFilter !== 'all') {
-                    issuesData = await IssueService.getByEpic(epicFilter);
-                } else if (sprintFilter !== 'all') {
-                    issuesData = await IssueService.getBySprint(sprintFilter);
-                } else {
-                    issuesData = await IssueService.getAll();
-                }
-                setIssues(issuesData.data);
+                console.log('Fetched Issues:', allIssuesRes.data);
+                console.log('Fetched Users:', usersRes.data);
+                
+                setUsers(usersRes.data);
+                setProjects(projectsRes.data);
+                setAllIssues(allIssuesRes.data);
+                
+                // Set epics from all issues
+                const epicsFromIssues = allIssuesRes.data.filter(issue => issue.type === 'epic');
+                setEpics(epicsFromIssues);
+                
+                // Appliquer les filtres aux nouvelles données
+                const filtered = applyFilters(allIssuesRes.data);
+                console.log('Filtered Issues:', filtered);
+                setFilteredIssues(filtered);
             } catch (error) {
                 console.error('Error fetching data:', error);
             } finally {
@@ -111,44 +148,27 @@ const IssueList = () => {
             }
         };
 
+        // Toujours charger les données fraîches au montage du composant
         fetchData();
-    }, [projectFilter, epicFilter, sprintFilter]);
+    }, []); // Dépendances vides pour ne s'exécuter qu'au montage
+
+    // Mettre à jour les filtres quand ils changent
+    useEffect(() => {
+        if (allIssues.length > 0) {  // Seulement si nous avons des issues
+            const filtered = applyFilters(allIssues);
+            setFilteredIssues(filtered);
+        }
+    }, [projectFilter, epicFilter, typeFilter, statusFilter, searchTerm, allIssues]);
 
     const handleProjectChange = (event) => {
         setProjectFilter(event.target.value);
-        setEpicFilter('all'); // Reset epic filter when project changes
-        setSprintFilter('all'); // Reset sprint filter when project changes
+        setEpicFilter('all');
     };
 
     const handleEpicChange = (event) => {
         setEpicFilter(event.target.value);
-        setProjectFilter('all'); // Reset project filter when epic is selected
-        setSprintFilter('all'); // Reset sprint filter when epic is selected
+        setProjectFilter('all');
     };
-
-    const handleSprintChange = (event) => {
-        setSprintFilter(event.target.value);
-        setProjectFilter('all'); // Reset project filter when sprint is selected
-        setEpicFilter('all'); // Reset epic filter when sprint is selected
-    };
-
-    const filteredIssues = issues.filter((issue) => {
-        const matchesSearch = (issue.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            issue.key?.toLowerCase().includes(searchTerm.toLowerCase())) ?? false;
-        const matchesStatus = statusFilter === 'all' || 
-            (issue.status && issue.status.toLowerCase() === statusFilter.toLowerCase());
-        const matchesType = typeFilter === 'all' || 
-            (issue.type && issue.type.toLowerCase() === typeFilter.toLowerCase());
-        return matchesSearch && matchesStatus && matchesType;
-    });
-
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
-                <CircularProgress />
-            </Box>
-        );
-    }
 
     return (
         <Box sx={{ width: '100%', p: 3 }}>
@@ -156,13 +176,15 @@ const IssueList = () => {
                 <Typography variant="h4" component="h1">
                     Issues
                 </Typography>
-                <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => navigate(projectId ? `/projects/${projectId}/issues/add` : '/issues/add')}
-                >
-                    Add Issue
-                </Button>
+                {userRole === 'manager' && (
+                    <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={() => navigate(projectId ? `/projects/${projectId}/issues/add` : '/issues/add')}
+                    >
+                        Add Issue
+                    </Button>
+                )}
             </Box>
 
             <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -214,25 +236,6 @@ const IssueList = () => {
                 </Grid>
                 <Grid item xs={12} sm={6} md={2}>
                     <FormControl fullWidth>
-                        <InputLabel>Sprint</InputLabel>
-                        <Select
-                            value={sprintFilter}
-                            onChange={handleSprintChange}
-                            label="Sprint"
-                        >
-                            <MenuItem value="all">All Sprints</MenuItem>
-                            {sprints
-                                .filter(sprint => projectFilter === 'all' || sprint.project === projectFilter)
-                                .map((sprint) => (
-                                    <MenuItem key={sprint._id} value={sprint._id}>
-                                        {sprint.name}
-                                    </MenuItem>
-                                ))}
-                        </Select>
-                    </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6} md={2}>
-                    <FormControl fullWidth>
                         <InputLabel>Type</InputLabel>
                         <Select
                             value={typeFilter}
@@ -276,7 +279,6 @@ const IssueList = () => {
                             <TableCell>Status</TableCell>
                             <TableCell>Assignee</TableCell>
                             <TableCell>Reporter</TableCell>
-                            <TableCell>Sprint</TableCell>
                             <TableCell>Story Points</TableCell>
                             <TableCell>Due Date</TableCell>
                             <TableCell>Created</TableCell>
@@ -284,119 +286,134 @@ const IssueList = () => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {filteredIssues.slice(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE).map((issue) => (
-                            <TableRow
-                                hover
-                                key={issue._id}
-                                sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-                            >
-                                <TableCell>{issue.key || 'N/A'}</TableCell>
-                                <TableCell>
-                                    {issue.type && typeConfig[issue.type] ? (
-                                        <Tooltip title={typeConfig[issue.type].label}>
-                                            <IconButton size="small" color={typeConfig[issue.type].color}>
-                                                {typeConfig[issue.type].icon}
-                                            </IconButton>
-                                        </Tooltip>
-                                    ) : (
-                                        <IconButton size="small" disabled>
-                                            <Assignment />
-                                        </IconButton>
-                                    )}
-                                </TableCell>
-                                <TableCell>{issue.title || 'Untitled'}</TableCell>
-                                <TableCell>
-                                    {issue.priority && priorityConfig[issue.priority] ? (
-                                        <Chip
-                                            size="small"
-                                            label={priorityConfig[issue.priority].label}
-                                            color={priorityConfig[issue.priority].color}
-                                            icon={<span>{priorityConfig[issue.priority].icon}</span>}
-                                        />
-                                    ) : (
-                                        <Chip
-                                            size="small"
-                                            label="None"
-                                            color="default"
-                                        />
-                                    )}
-                                </TableCell>
-                                <TableCell>
-                                    <Chip
-                                        size="small"
-                                        label={issue.status || 'No Status'}
-                                        color={issue.status?.toLowerCase() === 'done' ? 'success' : 'default'}
-                                    />
-                                </TableCell>
-                                <TableCell>
-                                    {issue.assignee ? (
-                                        <Tooltip title={issue.assignee.name || 'Unknown'}>
-                                            <Avatar
-                                                sx={{ width: 24, height: 24 }}
-                                                alt={issue.assignee.name}
-                                                src={issue.assignee.avatar}
-                                            >
-                                                {issue.assignee.name ? issue.assignee.name.charAt(0) : '?'}
-                                            </Avatar>
-                                        </Tooltip>
-                                    ) : (
-                                        <Tooltip title="Unassigned">
-                                            <Avatar sx={{ width: 24, height: 24 }}>?</Avatar>
-                                        </Tooltip>
-                                    )}
-                                </TableCell>
-                                <TableCell>
-                                    {issue.reporter ? (
-                                        <Tooltip title={issue.reporter.name || 'Unknown'}>
-                                            <Avatar
-                                                sx={{ width: 24, height: 24 }}
-                                                alt={issue.reporter.name}
-                                                src={issue.reporter.avatar}
-                                            >
-                                                {issue.reporter.name ? issue.reporter.name.charAt(0) : '?'}
-                                            </Avatar>
-                                        </Tooltip>
-                                    ) : (
-                                        <Tooltip title="No Reporter">
-                                            <Avatar sx={{ width: 24, height: 24 }}>?</Avatar>
-                                        </Tooltip>
-                                    )}
-                                </TableCell>
-                                <TableCell>
-                                    {issue.sprint ? (
-                                        <Chip
-                                            size="small"
-                                            label={issue.sprint.name}
-                                            color="info"
-                                        />
-                                    ) : (
-                                        <Chip
-                                            size="small"
-                                            label="Backlog"
-                                            variant="outlined"
-                                        />
-                                    )}
-                                </TableCell>
-                                <TableCell>{issue.storyPoints || '-'}</TableCell>
-                                <TableCell>
-                                    {issue.dueDate ? format(new Date(issue.dueDate), 'MMM d, yyyy') : '-'}
-                                </TableCell>
-                                <TableCell>
-                                    {issue.createdAt ? format(new Date(issue.createdAt), 'MMM d, yyyy') : 'N/A'}
-                                </TableCell>
-                                <TableCell>
-                                    <IconButton
-                                        size="small"
-                                        onClick={(event) => {
-                                            setAnchorEl(event.currentTarget);
-                                            setSelectedIssue(issue);
-                                        }}
-                                    >
-                                        <MoreVert />
-                                    </IconButton>
+                        {loading ? (
+                            <TableRow>
+                                <TableCell colSpan={12} align="center">
+                                    <CircularProgress />
                                 </TableCell>
                             </TableRow>
-                        ))}
+                        ) : filteredIssues.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={12} align="center">
+                                    <Typography variant="body1" color="textSecondary">
+                                        No issues found
+                                    </Typography>
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            filteredIssues
+                                .slice(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE)
+                                .map((issue) => (
+                                    <TableRow
+                                        hover
+                                        key={issue._id}
+                                        sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                                    >
+                                        <TableCell>{issue.key || 'N/A'}</TableCell>
+                                        <TableCell>
+                                            {issue.type && typeConfig[issue.type] ? (
+                                                <Tooltip title={typeConfig[issue.type].label}>
+                                                    <IconButton size="small" color={typeConfig[issue.type].color}>
+                                                        {typeConfig[issue.type].icon}
+                                                    </IconButton>
+                                                </Tooltip>
+                                            ) : (
+                                                <IconButton size="small" disabled>
+                                                    <Assignment />
+                                                </IconButton>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>{issue.title || 'Untitled'}</TableCell>
+                                        <TableCell>
+                                            {issue.priority && priorityConfig[issue.priority] ? (
+                                                <Chip
+                                                    size="small"
+                                                    label={priorityConfig[issue.priority].label}
+                                                    color={priorityConfig[issue.priority].color}
+                                                    icon={<span>{priorityConfig[issue.priority].icon}</span>}
+                                                />
+                                            ) : (
+                                                <Chip
+                                                    size="small"
+                                                    label="None"
+                                                    color="default"
+                                                />
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                size="small"
+                                                label={issue.status || 'No Status'}
+                                                color={issue.status?.toLowerCase() === 'done' ? 'success' : 'default'}
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            {issue.assignee ? (
+                                                <Tooltip title={(getUserById(issue.assignee)?.email) || 'Unknown'}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                        {console.log('Assignee ID:', issue.assignee)}
+                                                        {console.log('Assignee User:', getUserById(issue.assignee))}
+                                                        <Avatar
+                                                            sx={{ width: 24, height: 24, mr: 1 }}
+                                                            alt={(getUserById(issue.assignee)?.email) || 'Unknown'}
+                                                        >
+                                                            {(getUserById(issue.assignee)?.email?.charAt(0)) || '?'}
+                                                        </Avatar>
+                                                        <Typography variant="body2">
+                                                            {(getUserById(issue.assignee)?.email) || 'Unknown'}
+                                                        </Typography>
+                                                    </Box>
+                                                </Tooltip>
+                                            ) : (
+                                                <Tooltip title="Unassigned">
+                                                    <Avatar sx={{ width: 24, height: 24 }}>?</Avatar>
+                                                </Tooltip>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            {issue.reporter ? (
+                                                <Tooltip title={(getUserById(issue.reporter)?.email) || 'Unknown'}>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                        {console.log('Reporter ID:', issue.reporter)}
+                                                        {console.log('Reporter User:', getUserById(issue.reporter))}
+                                                        <Avatar
+                                                            sx={{ width: 24, height: 24, mr: 1 }}
+                                                            alt={(getUserById(issue.reporter)?.email) || 'Unknown'}
+                                                        >
+                                                            {(getUserById(issue.reporter)?.email?.charAt(0)) || '?'}
+                                                        </Avatar>
+                                                        <Typography variant="body2">
+                                                            {(getUserById(issue.reporter)?.email) || 'Unknown'}
+                                                        </Typography>
+                                                    </Box>
+                                                </Tooltip>
+                                            ) : (
+                                                <Tooltip title="No Reporter">
+                                                    <Avatar sx={{ width: 24, height: 24 }}>?</Avatar>
+                                                </Tooltip>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>{issue.storyPoints || '-'}</TableCell>
+                                        <TableCell>
+                                            {issue.dueDate ? format(new Date(issue.dueDate), 'MMM d, yyyy') : '-'}
+                                        </TableCell>
+                                        <TableCell>
+                                            {issue.createdAt ? format(new Date(issue.createdAt), 'MMM d, yyyy') : 'N/A'}
+                                        </TableCell>
+                                        <TableCell>
+                                            <IconButton
+                                                size="small"
+                                                onClick={(event) => {
+                                                    setAnchorEl(event.currentTarget);
+                                                    setSelectedIssue(issue);
+                                                }}
+                                            >
+                                                <MoreVert />
+                                            </IconButton>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                        )}
                     </TableBody>
                 </Table>
             </TableContainer>
@@ -439,17 +456,23 @@ const IssueList = () => {
                             const fetchData = async () => {
                                 setLoading(true);
                                 try {
-                                    let issuesData;
-                                    if (projectFilter !== 'all') {
-                                        issuesData = await IssueService.getByProject(projectFilter);
-                                    } else if (epicFilter !== 'all') {
-                                        issuesData = await IssueService.getByEpic(epicFilter);
-                                    } else if (sprintFilter !== 'all') {
-                                        issuesData = await IssueService.getBySprint(sprintFilter);
-                                    } else {
-                                        issuesData = await IssueService.getAll();
-                                    }
-                                    setIssues(issuesData.data);
+                                    const [projectsRes, allIssuesRes, usersRes] = await Promise.all([
+                                        ProjectService.getAll(),
+                                        IssueService.getAll(),
+                                        UserService.getAll()
+                                    ]);
+                                    
+                                    setUsers(usersRes.data);
+                                    setProjects(projectsRes.data);
+                                    setAllIssues(allIssuesRes.data);
+                                    
+                                    // Set epics from all issues
+                                    const epicsFromIssues = allIssuesRes.data.filter(issue => issue.type === 'epic');
+                                    setEpics(epicsFromIssues);
+                                    
+                                    // Apply initial filters
+                                    const filtered = applyFilters(allIssuesRes.data);
+                                    setFilteredIssues(filtered);
                                 } catch (error) {
                                     console.error('Error fetching data:', error);
                                 } finally {

@@ -20,7 +20,6 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import IssueService from '../service/IssueService';
 import ProjectService from '../service/ProjectService';
-import SprintService from '../service/SprintService';
 import UserService from '../service/UserService';
 import EpicService from '../service/EpicService';
 
@@ -56,7 +55,6 @@ const AddIssue = () => {
         status: 'todo',
         priority: 'medium',
         project: projectId || '',
-        sprint: '',
         epic: '',
         assignee: '',
         reporter: localStorage.getItem('userId') || '',
@@ -72,7 +70,6 @@ const AddIssue = () => {
 
     const [loading, setLoading] = useState(false);
     const [projects, setProjects] = useState([]);
-    const [sprints, setSprints] = useState([]);
     const [epics, setEpics] = useState([]);
     const [users, setUsers] = useState([]);
     const [error, setError] = useState('');
@@ -116,21 +113,13 @@ const AddIssue = () => {
         fetchInitialData();
     }, []);
 
-    // Fetch sprints and epics when project changes
+    // Fetch epics when project changes
     useEffect(() => {
         const fetchProjectData = async () => {
             if (!formData.project) return;
 
             try {
-                console.log('Fetching sprints for project:', formData.project);
-                const [sprintsRes, epicsRes] = await Promise.all([
-                    SprintService.getByProject(formData.project),
-                    EpicService.getByProject(formData.project)
-                ]);
-
-                if (sprintsRes.data) {
-                    setSprints(sprintsRes.data);
-                }
+                const epicsRes = await EpicService.getByProject(formData.project);
                 if (epicsRes.data) {
                     setEpics(epicsRes.data);
                 }
@@ -154,7 +143,6 @@ const AddIssue = () => {
         if (name === 'project') {
             setFormData(prev => ({
                 ...prev,
-                sprint: '',
                 epic: ''
             }));
         }
@@ -202,7 +190,6 @@ const AddIssue = () => {
                 project: formData.project,
                 reporter: formData.reporter,
                 assignee: formData.assignee || undefined,
-                sprint: formData.sprint || undefined,
                 epic: formData.epic || undefined,
                 storyPoints: formData.storyPoints ? Number(formData.storyPoints) : undefined,
                 originalEstimate: formData.originalEstimate ? Number(formData.originalEstimate) : undefined,
@@ -415,24 +402,6 @@ const AddIssue = () => {
 
                             <Grid item xs={12} sm={6}>
                                 <FormControl fullWidth>
-                                    <InputLabel>Sprint</InputLabel>
-                                    <Select
-                                        name="sprint"
-                                        value={formData.sprint}
-                                        onChange={handleChange}
-                                    >
-                                        <MenuItem value="">None</MenuItem>
-                                        {sprints.map((sprint) => (
-                                            <MenuItem key={sprint._id} value={sprint._id}>
-                                                {sprint.name}
-                                            </MenuItem>
-                                        ))}
-                                    </Select>
-                                </FormControl>
-                            </Grid>
-
-                            <Grid item xs={12} sm={6}>
-                                <FormControl fullWidth>
                                     <InputLabel>Epic</InputLabel>
                                     <Select
                                         name="epic"
@@ -443,7 +412,7 @@ const AddIssue = () => {
                                         <MenuItem value="">None</MenuItem>
                                         {epics.map((epic) => (
                                             <MenuItem key={epic._id} value={epic._id}>
-                                                {epic.title}
+                                                {epic.name}
                                             </MenuItem>
                                         ))}
                                     </Select>
@@ -461,7 +430,7 @@ const AddIssue = () => {
                                         <MenuItem value="">Unassigned</MenuItem>
                                         {users.map((user) => (
                                             <MenuItem key={user._id} value={user._id}>
-                                                {user.name}
+                                                {user.email}
                                             </MenuItem>
                                         ))}
                                     </Select>

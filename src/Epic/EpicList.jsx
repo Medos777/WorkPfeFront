@@ -44,9 +44,12 @@ import {
     Reply as ReplyIcon,
     ExpandMore as ExpandMoreIcon,
     ExpandLess as ExpandLessIcon,
-    InsertEmoticon as EmojiIcon
+    InsertEmoticon as EmojiIcon,
+    KeyboardArrowDown as KeyboardArrowDownIcon,
+    KeyboardArrowRight as KeyboardArrowRightIcon
 } from '@mui/icons-material';
 import epicService from '../service/EpicService';
+import issueService from '../service/IssueService';
 import AddEpic from './AddEpic';
 
 // Cookie utility functions
@@ -91,81 +94,95 @@ const EpicList = () => {
     const [commentLoading, setCommentLoading] = useState({});
     const [likeLoading, setLikeLoading] = useState({});
     const [currentUser, setCurrentUser] = useState(null);
-
-    // Filter states
+    const [editingEpic, setEditingEpic] = useState(null);
+    const [allIssues, setAllIssues] = useState([]); // Stocker toutes les issues
+    const [expandedEpics, setExpandedEpics] = useState({});
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [priorityFilter, setPriorityFilter] = useState('all');
 
+    // Fonction pour basculer l'expansion d'un epic
+    const toggleEpicExpansion = (epicId) => {
+        setExpandedEpics(prev => ({
+            ...prev,
+            [epicId]: !prev[epicId]
+        }));
+    };
+
+    // Charger toutes les issues une seule fois
+    const loadAllIssues = async () => {
+        try {
+            const response = await issueService.getAll();
+            console.log('All issues loaded:', response.data);
+            setAllIssues(response.data);
+        } catch (err) {
+            console.error('Failed to load issues:', err);
+            setError('Failed to load issues');
+        }
+    };
+
+    // Fonction pour filtrer les epics selon le rôle et les issues stockées
+    const filterEpicsByRole = (epicsData) => {
+        const userRole = localStorage.getItem('role');
+        
+        if (userRole === 'manager') {
+            return epicsData;
+        }
+
+        // Pour les développeurs, utiliser les issues stockées
+        const storedIssues = localStorage.getItem('filteredIssues');
+        if (!storedIssues) {
+            return [];
+        }
+
+        const { issues } = JSON.parse(storedIssues);
+        const userIssueEpicIds = new Set(issues.map(issue => issue.epic).filter(Boolean));
+
+        return epicsData.filter(epic => userIssueEpicIds.has(epic._id));
+    };
+
+    useEffect(() => {
+        const fetchEpics = async () => {
+            try {
+                setLoading(true);
+                const response = await epicService.getAll();
+                const filteredEpics = filterEpicsByRole(response.data);
+                setEpics(filteredEpics);
+            } catch (err) {
+                console.error('Error fetching epics:', err);
+                setError('Failed to load epics');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchEpics();
+    }, []);
+
+    // Obtenir les issues pour un epic à partir du localStorage
+    const getIssuesForEpic = (epicId) => {
+        const storedIssues = localStorage.getItem('filteredIssues');
+        if (!storedIssues) {
+            return [];
+        }
+
+        const { issues } = JSON.parse(storedIssues);
+        return issues.filter(issue => issue.epic === epicId);
+    };
+
+    useEffect(() => {
+        loadAllIssues();
+    }, []);
+
     useEffect(() => {
         const token = localStorage.getItem('token');
-        console.log('Raw token from localStorage:', token);
-
         if (token) {
             try {
                 const decoded = jwtDecode(token);
-                console.log('Full decoded token contents:', {
-                    ...decoded,
-                    exp: decoded.exp ? new Date(decoded.exp * 1000).toLocaleString() : 'No expiration',
-                    iat: decoded.iat ? new Date(decoded.iat * 1000).toLocaleString() : 'No issue date'
-                });
-
-                // Log all available fields in the token
-                console.log('Available fields in token:', Object.keys(decoded));
-
-                // Check specific fields we might be interested in
-                console.log('Potential username fields:', {
-                    username: decoded.username,
-                    name: decoded.name,
-                    sub: decoded.sub,
-                    email: decoded.email,
-                    preferred_username: decoded.preferred_username,
-                    given_name: decoded.given_name,
-                    nom: decoded.nom
-                });
-
-                const username = decoded.UserEmail; // Using UserEmail instead of username
-                console.log('Selected username:', username);
-
-                setCurrentUser({
-                    username: username,
-                    id: decoded.id || decoded.sub,
-                    fullToken: decoded
-                });
-            } catch (error) {
-                console.error('Error decoding token:', error);
-                console.error('Token that caused error:', token);
+                setCurrentUser(decoded);
+            } catch (err) {
+                console.error('Error decoding token:', err);
             }
-        } else {
-            console.log('No token found in localStorage');
-        }
-        loadEpics();
-        // Load comments from cookies
-        const savedComments = cookieUtils.getCookie('epicComments');
-        if (savedComments) {
-            // Migrate existing comments to new structure if needed
-            const migratedComments = Object.keys(savedComments).reduce((acc, epicId) => {
-                acc[epicId] = savedComments[epicId].map(comment => ({
-                    id: comment.id || Date.now().toString(),
-                    text: comment.text,
-                    timestamp: comment.timestamp,
-                    likes: comment.likes || 0,
-                    likedBy: comment.likedBy || [],
-                    replies: (comment.replies || []).map(reply => ({
-                        id: reply.id || Date.now().toString(),
-                        text: reply.text,
-                        timestamp: reply.timestamp,
-                        likes: reply.likes || 0,
-                        likedBy: reply.likedBy || [],
-                        replies: []
-                    })),
-                    username: comment.username || 'Anonymous'
-                }));
-                return acc;
-            }, {});
-            setComments(migratedComments);
-            // Update cookies with migrated data
-            cookieUtils.setCookie('epicComments', migratedComments);
         }
     }, []);
 
@@ -189,8 +206,26 @@ const EpicList = () => {
         setOpenAddDialog(true);
     };
 
+    const handleEdit = (epic) => {
+        setEditingEpic(epic);
+        setOpenAddDialog(true);
+    };
+
+    const handleDelete = async (epicId) => {
+        if (window.confirm('Are you sure you want to delete this epic?')) {
+            try {
+                await epicService.remove(epicId);
+                loadEpics(); // Recharger la liste après la suppression
+            } catch (err) {
+                setError('Failed to delete epic. Please try again later.');
+                console.error(err);
+            }
+        }
+    };
+
     const handleCloseDialog = (refresh = false) => {
         setOpenAddDialog(false);
+        setEditingEpic(null);
         if (refresh) {
             loadEpics();
         }
@@ -348,272 +383,111 @@ const EpicList = () => {
         }));
     };
 
-    const renderComment = (comment, epicId, isReply = false) => (
-        <Zoom in={true} style={{ transitionDelay: '100ms' }}>
-            <Box 
-                key={comment.id} 
-                sx={{ 
-                    ml: isReply ? 4 : 0, 
-                    mb: 2,
-                    position: 'relative',
-                    '&::before': isReply ? {
-                        content: '""',
-                        position: 'absolute',
-                        left: '-20px',
-                        top: '0',
-                        bottom: '0',
-                        width: '2px',
-                        backgroundColor: 'rgba(0, 0, 0, 0.08)',
-                        borderRadius: '4px'
-                    } : {}
-                }}
-            >
+    // Fonction de rendu des commentaires
+    const renderComment = (comment, epicId) => (
+        <Zoom in={true} key={comment.id}>
+            <Box sx={{ mb: 2 }}>
                 <Paper 
-                    elevation={0} 
+                    elevation={0}
                     sx={{ 
                         p: 2,
-                        backgroundColor: isReply ? 'rgba(0, 0, 0, 0.02)' : 'white',
-                        border: '1px solid',
-                        borderColor: 'rgba(0, 0, 0, 0.08)',
-                        borderRadius: '12px',
-                        transition: 'all 0.2s ease-in-out',
-                        '&:hover': {
-                            borderColor: 'rgba(0, 0, 0, 0.15)',
-                            backgroundColor: isReply ? 'rgba(0, 0, 0, 0.03)' : 'rgba(0, 0, 0, 0.01)'
-                        }
+                        backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                        position: 'relative'
                     }}
                 >
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                        {/* Avatar */}
-                        <Box
-                            sx={{
-                                width: 32,
-                                height: 32,
-                                borderRadius: '50%',
-                                backgroundColor: 'primary.light',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: 'white',
-                                fontSize: '0.875rem',
-                                fontWeight: 500
-                            }}
-                        >
-                            {comment.username?.[0]?.toUpperCase() || 'U'}
-                        </Box>
-
-                        <Box sx={{ flex: 1 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5, gap: 1 }}>
-                                <Typography 
-                                    variant="subtitle2" 
-                                    sx={{ 
-                                        fontWeight: 600,
-                                        color: 'text.primary'
-                                    }}
-                                >
-                                    {comment.username || 'Anonymous'}
-                                </Typography>
-                                <Typography 
-                                    variant="caption" 
-                                    sx={{ 
-                                        color: 'text.secondary',
-                                        fontSize: '0.75rem'
-                                    }}
-                                >
-                                    {new Date(comment.timestamp).toLocaleString()}
-                                </Typography>
-                            </Box>
-
-                            <Typography 
-                                variant="body2" 
-                                sx={{ 
-                                    color: 'text.primary',
-                                    lineHeight: 1.5,
-                                    mb: 1
-                                }}
-                            >
-                                {comment.text}
-                            </Typography>
-
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                <Button
-                                    size="small"
-                                    startIcon={
-                                        likeLoading[comment.id] ? (
-                                            <CircularProgress size={16} />
-                                        ) : comment.likedBy?.includes('current-user') ? (
-                                            <FavoriteIcon fontSize="small" color="error" />
-                                        ) : (
-                                            <FavoriteBorderIcon fontSize="small" />
-                                        )
-                                    }
-                                    onClick={() => !likeLoading[comment.id] && handleLike(epicId, comment.id)}
-                                    disabled={likeLoading[comment.id]}
-                                    sx={{ 
-                                        color: comment.likedBy?.includes('current-user') ? 'error.main' : 'text.secondary',
-                                        textTransform: 'none',
-                                        '&:hover': {
-                                            backgroundColor: 'rgba(0, 0, 0, 0.04)'
-                                        }
-                                    }}
-                                >
-                                    {comment.likes || 0} {comment.likes === 1 ? 'Like' : 'Likes'}
-                                </Button>
-
-                                <Button
-                                    size="small"
-                                    startIcon={<ReplyIcon fontSize="small" />}
-                                    onClick={() => toggleReplies(comment.id)}
-                                    sx={{ 
-                                        color: 'text.secondary',
-                                        textTransform: 'none',
-                                        '&:hover': {
-                                            backgroundColor: 'rgba(0, 0, 0, 0.04)'
-                                        }
-                                    }}
-                                >
-                                    Reply
-                                </Button>
-                            </Box>
-                        </Box>
-                    </Box>
+                    {/* Contenu du commentaire */}
+                    <Typography variant="body2">
+                        {comment.text}
+                    </Typography>
                     
-                    <Collapse in={expandedComments[comment.id]}>
-                        <Box sx={{ mt: 2, ml: 5 }}>
-                            {(comment.replies || []).map(reply => renderComment(reply, epicId, true))}
-                            <Paper
-                                elevation={0}
-                                sx={{ 
-                                    mt: 2,
-                                    backgroundColor: 'rgba(0, 0, 0, 0.02)',
-                                    borderRadius: '8px'
-                                }}
-                            >
-                                <Box sx={{ display: 'flex', gap: 2, p: 2 }}>
-                                    <Box
-                                        sx={{
-                                            width: 32,
-                                            height: 32,
-                                            borderRadius: '50%',
-                                            backgroundColor: 'primary.light',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            color: 'white',
-                                            fontSize: '0.875rem',
-                                            fontWeight: 500
-                                        }}
-                                    >
-                                        U
-                                    </Box>
-                                    <TextField
-                                        size="small"
-                                        placeholder="Write a reply..."
-                                        value={replyingTo[comment.id] || ''}
-                                        onChange={(e) => handleCommentChange(epicId, e.target.value, comment.id)}
-                                        fullWidth
-                                        multiline
-                                        maxRows={4}
-                                        disabled={commentLoading[comment.id]}
-                                        sx={{
-                                            '& .MuiOutlinedInput-root': {
-                                                backgroundColor: 'white'
-                                            }
-                                        }}
-                                        InputProps={{
-                                            endAdornment: (
-                                                <InputAdornment position="end">
-                                                    <Tooltip title="Add emoji">
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => {/* TODO: Implement emoji picker */}}
-                                                            disabled={commentLoading[comment.id]}
-                                                        >
-                                                            <EmojiIcon fontSize="small" />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => handleAddComment(epicId, comment.id)}
-                                                        disabled={!replyingTo[comment.id]?.trim() || commentLoading[comment.id]}
-                                                        color="primary"
-                                                    >
-                                                        {commentLoading[comment.id] ? (
-                                                            <CircularProgress size={16} />
-                                                        ) : (
-                                                            <SendIcon fontSize="small" />
-                                                        )}
-                                                    </IconButton>
-                                                </InputAdornment>
-                                            )
-                                        }}
-                                    />
-                                </Box>
-                            </Paper>
-                        </Box>
-                    </Collapse>
-                    
-                    {!isReply && (comment.replies || []).length > 0 && !expandedComments[comment.id] && (
+                    {/* Actions du commentaire */}
+                    <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
                         <Button
                             size="small"
-                            startIcon={<ExpandMoreIcon />}
-                            onClick={() => toggleReplies(comment.id)}
-                            sx={{ 
-                                ml: 7,
-                                mt: 1,
-                                color: 'text.secondary',
-                                textTransform: 'none',
-                                '&:hover': {
-                                    backgroundColor: 'rgba(0, 0, 0, 0.04)'
-                                }
-                            }}
+                            onClick={() => handleLikeComment(epicId, comment.id)}
+                            disabled={likeLoading[`${epicId}-${comment.id}`]}
+                            startIcon={
+                                comment.likedBy?.includes(currentUser?.id) ? 
+                                <FavoriteIcon color="error" /> : 
+                                <FavoriteBorderIcon />
+                            }
                         >
-                            Show {(comment.replies || []).length} {(comment.replies || []).length === 1 ? 'reply' : 'replies'}
+                            {comment.likes || 0} Likes
                         </Button>
-                    )}
+                        
+                        <Button
+                            size="small"
+                            onClick={() => handleReplyClick(epicId, comment.id)}
+                            startIcon={<ReplyIcon />}
+                        >
+                            Reply
+                        </Button>
+                        
+                        {comment.replies?.length > 0 && (
+                            <Button
+                                size="small"
+                                onClick={() => toggleCommentExpansion(epicId, comment.id)}
+                                endIcon={expandedComments[`${epicId}-${comment.id}`] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                            >
+                                Show {comment.replies.length} {comment.replies.length === 1 ? 'reply' : 'replies'}
+                            </Button>
+                        )}
+                    </Box>
                 </Paper>
             </Box>
         </Zoom>
     );
 
+    // Filtrer les epics selon la recherche et les filtres
     const filteredEpics = epics.filter(epic => {
         const matchesSearch = epic.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            epic.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            epic.key.toLowerCase().includes(searchTerm.toLowerCase());
+                            epic.description?.toLowerCase().includes(searchTerm.toLowerCase());
         
         const matchesStatus = statusFilter === 'all' || epic.status.toLowerCase() === statusFilter;
-        const matchesPriority = priorityFilter === 'all' || epic.priority.toLowerCase() === priorityFilter;
 
-        return matchesSearch && matchesStatus && matchesPriority;
+        return matchesSearch && matchesStatus;
     });
 
     return (
-        <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
-            <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-                <Grid container spacing={3} alignItems="center" sx={{ mb: 3 }}>
-                    <Grid item xs={12} sm={6}>
-                        <Typography variant="h5" component="h1" sx={{ mb: 1 }}>
-                            Epics
-                        </Typography>
-                    </Grid>
-                    <Grid item xs={12} sm={6} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <Button
-                            variant="contained"
-                            startIcon={<AddIcon />}
-                            onClick={() => setOpenAddDialog(true)}
-                            sx={{ width: { xs: '100%', sm: 'auto' } }}
-                        >
-                            Add Epic
-                        </Button>
-                    </Grid>
-                </Grid>
+        <Box sx={{ p: 3 }}>
+            {/* En-tête avec titre et bouton d'ajout */}
+            <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                mb: 3,
+                backgroundColor: 'background.paper',
+                p: 2,
+                borderRadius: 1,
+                boxShadow: 1
+            }}>
+                <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
+                    Epics
+                </Typography>
+                {localStorage.getItem('role') === 'manager' && (
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<AddIcon />}
+                        onClick={() => setOpenAddDialog(true)}
+                        sx={{
+                            borderRadius: 2,
+                            textTransform: 'none',
+                            fontWeight: 'bold'
+                        }}
+                    >
+                        Create New Epic
+                    </Button>
+                )}
+            </Box>
 
-                <Grid container spacing={2}>
+            {/* Barre de filtres */}
+            <Paper sx={{ p: 2, mb: 3 }}>
+                <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} md={4}>
                         <TextField
                             fullWidth
-                            size="small"
-                            placeholder="Search epics..."
+                            label="Search Epics"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             InputProps={{
@@ -623,15 +497,16 @@ const EpicList = () => {
                                     </InputAdornment>
                                 ),
                             }}
+                            size="small"
                         />
                     </Grid>
-                    <Grid item xs={12} sm={6} md={4}>
+                    <Grid item xs={12} md={3}>
                         <FormControl fullWidth size="small">
-                            <InputLabel>Filter by Status</InputLabel>
+                            <InputLabel>Status</InputLabel>
                             <Select
                                 value={statusFilter}
-                                label="Filter by Status"
                                 onChange={(e) => setStatusFilter(e.target.value)}
+                                label="Status"
                             >
                                 <MenuItem value="all">All Statuses</MenuItem>
                                 <MenuItem value="todo">To Do</MenuItem>
@@ -640,199 +515,139 @@ const EpicList = () => {
                             </Select>
                         </FormControl>
                     </Grid>
-                    <Grid item xs={12} sm={6} md={4}>
+                    <Grid item xs={12} md={3}>
                         <FormControl fullWidth size="small">
-                            <InputLabel>Filter by Priority</InputLabel>
+                            <InputLabel>Priority</InputLabel>
                             <Select
                                 value={priorityFilter}
-                                label="Filter by Priority"
                                 onChange={(e) => setPriorityFilter(e.target.value)}
+                                label="Priority"
                             >
                                 <MenuItem value="all">All Priorities</MenuItem>
-                                <MenuItem value="lowest">Lowest</MenuItem>
-                                <MenuItem value="low">Low</MenuItem>
-                                <MenuItem value="medium">Medium</MenuItem>
                                 <MenuItem value="high">High</MenuItem>
-                                <MenuItem value="highest">Highest</MenuItem>
+                                <MenuItem value="medium">Medium</MenuItem>
+                                <MenuItem value="low">Low</MenuItem>
                             </Select>
                         </FormControl>
                     </Grid>
                 </Grid>
             </Paper>
 
+            {/* Liste des Epics */}
             {loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                     <CircularProgress />
                 </Box>
             ) : error ? (
                 <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>
+            ) : filteredEpics.length === 0 ? (
+                <Paper sx={{ p: 4, textAlign: 'center', backgroundColor: 'grey.50' }}>
+                    <Typography variant="h6" color="textSecondary" gutterBottom>
+                        No Epics Found
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                        {searchTerm ? 'Try adjusting your search or filters' : 'Start by creating a new epic'}
+                    </Typography>
+                </Paper>
             ) : (
                 <Grid container spacing={2}>
                     {filteredEpics.map((epic) => (
                         <Grid item xs={12} key={epic._id}>
                             <Card 
                                 sx={{ 
-                                    mb: 2,
+                                    p: 2,
+                                    transition: 'all 0.3s',
                                     '&:hover': {
-                                        boxShadow: (theme) => theme.shadows[4],
                                         transform: 'translateY(-2px)',
-                                        transition: 'all 0.2s ease-in-out'
+                                        boxShadow: 3
                                     }
                                 }}
                             >
-                                <CardContent sx={{ p: 3 }}>
-                                    <Grid container spacing={3}>
-                                        <Grid item xs={12} sm={8}>
-                                            <Typography 
-                                                variant="h6" 
-                                                component="h2" 
-                                                sx={{ 
-                                                    mb: 1,
-                                                    fontWeight: 600
-                                                }}
-                                            >
-                                                {epic.name}
-                                            </Typography>
-                                            <Typography 
-                                                color="text.secondary" 
-                                                sx={{ 
-                                                    mb: 2,
-                                                    lineHeight: 1.6
-                                                }}
-                                            >
-                                                {epic.description}
-                                            </Typography>
-                                        </Grid>
-                                        <Grid item xs={12} sm={4} sx={{ 
-                                            display: 'flex', 
-                                            flexDirection: { xs: 'row', sm: 'column' },
-                                            justifyContent: { xs: 'flex-start', sm: 'flex-start' },
-                                            gap: 1.5
-                                        }}>
-                                            <Chip
-                                                label={epic.status}
-                                                size={isMobile ? "small" : "medium"}
-                                                sx={{ 
-                                                    minWidth: 100,
-                                                    height: 32,
-                                                    bgcolor: getStatusColor(epic.status).bg,
-                                                    color: getStatusColor(epic.status).color,
-                                                    fontWeight: 500,
-                                                    fontSize: '0.875rem'
-                                                }}
-                                            />
-                                            <Chip
-                                                label={epic.priority}
-                                                size={isMobile ? "small" : "medium"}
-                                                sx={{ 
-                                                    minWidth: 100,
-                                                    height: 32,
-                                                    bgcolor: 'white',
-                                                    color: getPriorityColor(epic.priority),
-                                                    borderColor: getPriorityColor(epic.priority),
-                                                    border: 1,
-                                                    fontWeight: 500,
-                                                    fontSize: '0.875rem'
-                                                }}
-                                            />
-                                        </Grid>
-                                    </Grid>
-
-                                    <Box sx={{ mt: 2 }}>
-                                        <Stack 
-                                            direction={{ xs: 'column', sm: 'row' }}
-                                            spacing={2}
-                                            sx={{ mt: 2 }}
-                                        >
-                                            <Button
-                                                variant="outlined"
-                                                size={isMobile ? "small" : "medium"}
-                                                startIcon={<EditIcon />}
-                                                onClick={() => {/* TODO: Implement edit */}}
-                                                sx={{ flex: { xs: '1', sm: '0 auto' } }}
-                                            >
-                                                Edit
-                                            </Button>
-                                            <Button
-                                                variant="outlined"
-                                                size={isMobile ? "small" : "medium"}
-                                                startIcon={<DeleteIcon />}
-                                                color="error"
-                                                onClick={() => {/* TODO: Implement delete */}}
-                                                sx={{ flex: { xs: '1', sm: '0 auto' } }}
-                                            >
-                                                Delete
-                                            </Button>
-                                        </Stack>
-                                    </Box>
-
-                                    {/* Comments section */}
-                                    <Box sx={{ mt: 3 }}>
-                                        <Typography variant="subtitle1" gutterBottom>
-                                            Comments
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                                    <Box>
+                                        <Typography variant="h6" gutterBottom>
+                                            {epic.name}
                                         </Typography>
-                                        <Box sx={{ pl: { xs: 0, sm: 2 } }}>
-                                            {(comments[epic._id] || []).map((comment) => renderComment(comment, epic._id))}
-                                        </Box>
-                                        <Box sx={{ mt: 2 }}>
-                                            <TextField
-                                                size={isMobile ? "small" : "medium"}
-                                                placeholder="Write a comment..."
-                                                value={newComments[epic._id] || ''}
-                                                onChange={(e) => handleCommentChange(epic._id, e.target.value)}
-                                                fullWidth
-                                                multiline
-                                                maxRows={4}
-                                                disabled={commentLoading[epic._id]}
-                                                sx={{
-                                                    '& .MuiOutlinedInput-root': {
-                                                        backgroundColor: 'white'
-                                                    }
-                                                }}
-                                                InputProps={{
-                                                    endAdornment: (
-                                                        <InputAdornment position="end">
-                                                            <Stack direction="row" spacing={1}>
-                                                                <Tooltip title="Add emoji">
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        onClick={() => {/* TODO: Implement emoji picker */}}
-                                                                        disabled={commentLoading[epic._id]}
-                                                                    >
-                                                                        <EmojiIcon fontSize="small" />
-                                                                    </IconButton>
-                                                                </Tooltip>
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => handleAddComment(epic._id)}
-                                                                    disabled={!newComments[epic._id]?.trim() || commentLoading[epic._id]}
-                                                                    color="primary"
-                                                                >
-                                                                    {commentLoading[epic._id] ? (
-                                                                        <CircularProgress size={16} />
-                                                                    ) : (
-                                                                        <SendIcon fontSize="small" />
-                                                                    )}
-                                                                </IconButton>
-                                                            </Stack>
-                                                        </InputAdornment>
-                                                    )
-                                                }}
-                                            />
+                                        <Typography variant="body2" color="textSecondary" paragraph>
+                                            {epic.description}
+                                        </Typography>
+                                    </Box>
+                                    <Box sx={{ display: 'flex', gap: 1 }}>
+                                        <Chip 
+                                            label={epic.status}
+                                            color={
+                                                epic.status === 'done' ? 'success' :
+                                                epic.status === 'inProgress' ? 'warning' : 'default'
+                                            }
+                                            size="small"
+                                        />
+                                        <Chip 
+                                            label={epic.priority}
+                                            color={
+                                                epic.priority === 'high' ? 'error' :
+                                                epic.priority === 'medium' ? 'warning' : 'info'
+                                            }
+                                            size="small"
+                                        />
+                                    </Box>
+                                </Box>
+
+                                {/* Issues associées */}
+                                {getIssuesForEpic(epic._id).length > 0 && (
+                                    <Box>
+                                        <Typography variant="subtitle2" gutterBottom>
+                                            Associated Issues ({getIssuesForEpic(epic._id).length})
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                            {getIssuesForEpic(epic._id).map(issue => (
+                                                <Chip
+                                                    key={issue._id}
+                                                    label={issue.title}
+                                                    size="small"
+                                                    sx={{ mb: 1 }}
+                                                />
+                                            ))}
                                         </Box>
                                     </Box>
-                                </CardContent>
+                                )}
+
+                                {/* Actions */}
+                                {localStorage.getItem('role') === 'manager' && (
+                                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
+                                        <Button
+                                            size="small"
+                                            startIcon={<EditIcon />}
+                                            onClick={() => handleEdit(epic)}
+                                        >
+                                            Edit
+                                        </Button>
+                                        <Button
+                                            size="small"
+                                            startIcon={<DeleteIcon />}
+                                            color="error"
+                                            onClick={() => handleDelete(epic._id)}
+                                        >
+                                            Delete
+                                        </Button>
+                                    </Box>
+                                )}
                             </Card>
                         </Grid>
                     ))}
                 </Grid>
             )}
 
-            <AddEpic
-                open={openAddDialog}
-                onClose={() => setOpenAddDialog(false)}
-                projectId={projectId}
-            />
+            {/* Dialog pour ajouter/éditer un Epic */}
+            {openAddDialog && (
+                <AddEpic
+                    open={openAddDialog}
+                    onClose={() => setOpenAddDialog(false)}
+                    onAdd={(newEpic) => {
+                        setEpics([...epics, newEpic]);
+                        setOpenAddDialog(false);
+                    }}
+                />
+            )}
         </Box>
     );
 };
