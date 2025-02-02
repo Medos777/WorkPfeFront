@@ -127,6 +127,7 @@ const IssueList = () => {
     // Get user role and ID from localStorage
     const userRole = localStorage.getItem('role');
     const userId = localStorage.getItem('userId');
+    const isDeveloper = userRole === 'developer';
 
     // Function to get user by ID
     const getUserById = (userId) => {
@@ -137,7 +138,7 @@ const IssueList = () => {
     const applyFilters = (issues) => {
         // Si l'utilisateur est un développeur, filtrer uniquement ses issues
         let filteredByRole = issues;
-        if (userRole === 'developer') {
+        if (isDeveloper) {
             filteredByRole = issues.filter(issue => issue.assignee === userId);
         }
 
@@ -408,7 +409,7 @@ const IssueList = () => {
                 <Typography variant="h4" component="h1">
                     Issues
                 </Typography>
-                {userRole === 'manager' && (
+                {!isDeveloper && (
                     <Button
                         variant="contained"
                         startIcon={<AddIcon />}
@@ -641,15 +642,17 @@ const IssueList = () => {
                                                 {issue.createdAt ? format(new Date(issue.createdAt), 'MMM d, yyyy') : 'N/A'}
                                             </TableCell>
                                             <TableCell>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={(event) => {
-                                                        setAnchorEl(event.currentTarget);
-                                                        setSelectedIssue(issue);
-                                                    }}
-                                                >
-                                                    <MoreVert />
-                                                </IconButton>
+                                                {!isDeveloper && (
+                                                    <IconButton
+                                                        onClick={(event) => {
+                                                            setAnchorEl(event.currentTarget);
+                                                            setSelectedIssue(issue);
+                                                        }}
+                                                        size="small"
+                                                    >
+                                                        <MoreVert />
+                                                    </IconButton>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     ))

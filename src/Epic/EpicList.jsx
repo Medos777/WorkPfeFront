@@ -133,29 +133,8 @@ const EpicList = () => {
             try {
                 setLoading(true);
                 setError('');
-                console.log('Fetching all epics...');
                 const response = await epicService.getAll();
-                console.log('All epics:', response.data);
-                
-                // Filter epics by project
-                let filteredEpics = response.data.filter(epic => epic.project === projectId);
-                console.log('Project epics:', filteredEpics);
-
-                // Filter for developers based on their issues
-                const userRole = localStorage.getItem('role');
-                if (userRole !== 'manager') {
-                    const storedIssues = localStorage.getItem('filteredIssues');
-                    if (storedIssues) {
-                        const { issues } = JSON.parse(storedIssues);
-                        const userIssueEpicIds = new Set(issues.map(issue => issue.epic).filter(Boolean));
-                        filteredEpics = filteredEpics.filter(epic => userIssueEpicIds.has(epic._id));
-                    } else {
-                        filteredEpics = [];
-                    }
-                }
-
-                console.log('Final filtered epics:', filteredEpics);
-                setEpics(filteredEpics);
+                setEpics(response.data);
             } catch (err) {
                 console.error('Error fetching epics:', err);
                 setError('Failed to load epics');
@@ -165,7 +144,7 @@ const EpicList = () => {
         };
 
         fetchEpics();
-    }, [projectId, refreshTrigger]);
+    }, [refreshTrigger]);
 
     // Handle epic dialog close
     const handleEpicDialogClose = (success) => {

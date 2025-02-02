@@ -117,6 +117,10 @@ const SprintList = () => {
     });
     const [selectedBacklogItems, setSelectedBacklogItems] = useState([]);
 
+    // Get user role from localStorage
+    const userRole = localStorage.getItem('role');
+    const isDeveloper = userRole === 'developer';
+
     // Fetch data
     const fetchData = useCallback(async () => {
         try {
@@ -271,24 +275,19 @@ const SprintList = () => {
 
     return (
         <Box sx={{ p: 3 }}>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#333' }}>
-                    Sprint Management
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="h4" component="h1">
+                    Sprints
                 </Typography>
-                <Tooltip title="Add New Sprint">
-                    <IconButton
-                        color="primary"
+                {!isDeveloper && (
+                    <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
                         onClick={() => setAddDialogOpen(true)}
-                        sx={{
-                            backgroundColor: (theme) => theme.palette.primary.light,
-                            '&:hover': {
-                                backgroundColor: (theme) => theme.palette.primary.main,
-                            },
-                        }}
                     >
-                        <AddIcon />
-                    </IconButton>
-                </Tooltip>
+                        Add Sprint
+                    </Button>
+                )}
             </Box>
 
             {error && (
@@ -298,7 +297,7 @@ const SprintList = () => {
             )}
 
             {loading ? (
-                <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
                     <CircularProgress />
                 </Box>
             ) : (
@@ -322,16 +321,18 @@ const SprintList = () => {
                                     </Box>
                                 </StyledAccordionSummary>
                             </Box>
-                            <ActionButton
-                                size="small"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleMenuOpen(e, sprint);
-                                }}
-                                sx={{ mr: 1 }}
-                            >
-                                <MoreVertIcon />
-                            </ActionButton>
+                            {!isDeveloper && (
+                                <ActionButton
+                                    size="small"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleMenuOpen(e, sprint);
+                                    }}
+                                    sx={{ mr: 1 }}
+                                >
+                                    <MoreVertIcon />
+                                </ActionButton>
+                            )}
                         </Box>
                         <StyledAccordionDetails>
                             <Grid container spacing={3}>

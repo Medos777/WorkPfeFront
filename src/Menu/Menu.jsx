@@ -219,15 +219,9 @@ const Menu = ({ darkMode, toggleDarkMode }) => {
         
         // Nettoyer le localStorage
         localStorage.clear(); // Nettoie tout le localStorage
-        // ou spécifiquement :
-        localStorage.removeItem('token');
-        localStorage.removeItem('userId');
-        localStorage.removeItem('role');
-        localStorage.removeItem('projectType');
-        localStorage.removeItem('isLoggedIn'); // Important pour le contrôle d'affichage du menu
         
-        // Rediriger vers la page de connexion
-        navigate('/login');
+        // Refresh the page
+        window.location.reload();
     };
 
     return (

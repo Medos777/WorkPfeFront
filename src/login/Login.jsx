@@ -66,11 +66,13 @@ export default function Login() {
                             team.members && team.members.some(member => member._id === userId)
                         );
                         localStorage.setItem("userTeams", JSON.stringify(userTeams.map(team => team._id)));
-                        navigate('/dashboard');
+                        // Refresh the page which will then redirect to dashboard
+                        window.location.href = '/dashboard';
                     })
                     .catch((error) => {
                         console.error("Error fetching teams:", error);
-                        navigate('/dashboard');
+                        // Even if teams fetch fails, refresh and redirect to dashboard
+                        window.location.href = '/dashboard';
                     });
             })
             .catch((error) => {

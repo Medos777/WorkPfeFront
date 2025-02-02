@@ -39,6 +39,10 @@ const ListBacklog = () => {
     const [editedBacklogName, setEditedBacklogName] = useState("");
     const [addDialogOpen, setAddDialogOpen] = useState(false);
 
+    // Get user role from localStorage
+    const userRole = localStorage.getItem('role');
+    const isDeveloper = userRole === 'developer';
+
     useEffect(() => {
         fetchBacklogs();
     }, []);
@@ -152,11 +156,13 @@ const ListBacklog = () => {
                 <Typography variant="h4" gutterBottom>
                     Backlogs
                 </Typography>
-                <Tooltip title="Add New Backlog">
-                    <IconButton color="primary" onClick={handleAddBacklogOpen}>
-                        <AddIcon />
-                    </IconButton>
-                </Tooltip>
+                {!isDeveloper && (
+                    <Tooltip title="Add New Backlog">
+                        <IconButton color="primary" onClick={handleAddBacklogOpen}>
+                            <AddIcon />
+                        </IconButton>
+                    </Tooltip>
+                )}
             </Box>
             <Grid container spacing={3}>
                 {backlogs.length > 0 ? (
@@ -198,11 +204,13 @@ const ListBacklog = () => {
                                             <EditIcon />
                                         </IconButton>
                                     </Tooltip>
-                                    <Tooltip title="Delete Backlog">
-                                        <IconButton color="error" onClick={() => handleDeleteBacklog(backlog._id)}>
-                                            <DeleteIcon />
-                                        </IconButton>
-                                    </Tooltip>
+                                    {!isDeveloper && (
+                                        <Tooltip title="Delete Backlog">
+                                            <IconButton color="error" onClick={() => handleDeleteBacklog(backlog._id)}>
+                                                <DeleteIcon />
+                                            </IconButton>
+                                        </Tooltip>
+                                    )}
                                     <Tooltip title="Export as CSV">
                                         <Button
                                             variant="outlined"

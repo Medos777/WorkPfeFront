@@ -27,6 +27,9 @@ import {
     Accordion,
     AccordionSummary,
     AccordionDetails,
+    FormControl,
+    InputLabel,
+    Select,
 } from "@mui/material";
 import {
     Edit as EditIcon,
@@ -67,41 +70,20 @@ const ListProject = () => {
         status: '',
         startDate: '',
         endDate: '',
+        projectType: '', // Add projectType filter
     });
+
+    // Get user role from localStorage
+    const userRole = localStorage.getItem('role');
+    const isDeveloper = userRole === 'developer';
 
     useEffect(() => {
         const fetchProjects = async () => {
             try {
-                const role = localStorage.getItem('role');
-                const userId = localStorage.getItem('id');
-
-                if (role === 'developer') {
-                    // Get all projects first
-                    const projectsResponse = await ProjectService.getAll();
-                    const allProjects = projectsResponse.data;
-                    
-                    // Filter projects based on team membership
-                    const userProjects = [];
-                    for (const project of allProjects) {
-                        if (project.teams) {
-                            for (const team of project.teams) {
-                                const teamResponse = await TeamService.getTeam(team.id);
-                                const teamData = teamResponse.data;
-                                if (teamData.members && teamData.members.some(member => member.id === userId)) {
-                                    userProjects.push(project);
-                                    break; // Break once we find one team the user is part of
-                                }
-                            }
-                        }
-                    }
-                    setProjects(userProjects);
-                } else {
-                    // For managers, show all projects
-                    const response = await ProjectService.getAll();
-                    setProjects(response.data);
-                }
+                const response = await ProjectService.getAll();
+                setProjects(response.data);
             } catch (error) {
-                console.error('Error fetching projects:', error);
+                console.error("Error fetching projects:", error);
             }
         };
 
@@ -151,10 +133,17 @@ const ListProject = () => {
         });
     };
 
-    const filteredProjects = projects.filter(project =>
-        project?.projectName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project?.description?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredProjects = projects.filter(project => {
+        const matchesSearch = project.projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            project.description.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        const matchesStatus = !filters.status || project.status === filters.status;
+        const matchesStartDate = !filters.startDate || new Date(project.startDate) >= new Date(filters.startDate);
+        const matchesEndDate = !filters.endDate || new Date(project.endDate) <= new Date(filters.endDate);
+        const matchesProjectType = !filters.projectType || project.projectType === filters.projectType;
+
+        return matchesSearch && matchesStatus && matchesStartDate && matchesEndDate && matchesProjectType;
+    });
 
     const sortedProjects = sortProjects(filteredProjects);
 
@@ -162,7 +151,8 @@ const ListProject = () => {
         const matchesStatus = !filters.status || project.status === filters.status;
         const matchesStartDate = !filters.startDate || new Date(project.startDate) >= new Date(filters.startDate);
         const matchesEndDate = !filters.endDate || new Date(project.endDate) <= new Date(filters.endDate);
-        return matchesStatus && matchesStartDate && matchesEndDate;
+        const matchesProjectType = !filters.projectType || project.projectType === filters.projectType;
+        return matchesStatus && matchesStartDate && matchesEndDate && matchesProjectType;
     });
 
     const paginatedProjects = filteredAndSortedProjects.slice(
@@ -291,30 +281,34 @@ const ListProject = () => {
                                 <TimelineIcon />
                             </IconButton>
                         </Tooltip>
-                        <Tooltip title="Edit Project">
-                            <IconButton 
-                                size="small" 
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEditProject(project.id);
-                                }}
-                                className="edit-button"
-                            >
-                                <EditIcon />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete Project">
-                            <IconButton 
-                                size="small" 
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteClick(project);
-                                }}
-                                className="delete-button"
-                            >
-                                <DeleteIcon />
-                            </IconButton>
-                        </Tooltip>
+                        {!isDeveloper && (
+                            <React.Fragment>
+                                <Tooltip title="Edit Project">
+                                    <IconButton 
+                                        size="small" 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleEditProject(project.id);
+                                        }}
+                                        className="edit-button"
+                                    >
+                                        <EditIcon />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Delete Project">
+                                    <IconButton 
+                                        size="small" 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteClick(project);
+                                        }}
+                                        className="delete-button"
+                                    >
+                                        <DeleteIcon />
+                                    </IconButton>
+                                </Tooltip>
+                            </React.Fragment>
+                        )}
                     </div>
                 </TableCell>
             </TableRow>
@@ -349,15 +343,17 @@ const ListProject = () => {
                                     Cards
                                 </Button>
                             </ButtonGroup>
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                startIcon={<AddIcon />}
-                                onClick={handleCreateProject}
-                                className="create-button"
-                            >
-                                Create Project
-                            </Button>
+                            {!isDeveloper && (
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    startIcon={<AddIcon />}
+                                    onClick={handleCreateProject}
+                                    className="create-button"
+                                >
+                                    Create Project
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -375,59 +371,50 @@ const ListProject = () => {
                             <Typography>Filters</Typography>
                         </AccordionSummary>
                         <AccordionDetails>
-                            <div className="row g-3">
-                                <div className="col-12 col-md-3">
-                                    <TextField
-                                        select
-                                        fullWidth
-                                        size="small"
-                                        label="Status"
+                            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                                <FormControl sx={{ minWidth: 120 }}>
+                                    <InputLabel>Status</InputLabel>
+                                    <Select
                                         value={filters.status}
-                                        onChange={(e) => handleFilterChange('status', e.target.value)}
+                                        label="Status"
+                                        onChange={(e) => setFilters({ ...filters, status: e.target.value })}
                                     >
                                         <MenuItem value="">All</MenuItem>
-                                        {statusOptions.map(status => (
-                                            <MenuItem key={status} value={status}>{status}</MenuItem>
-                                        ))}
-                                    </TextField>
-                                </div>
-                                <div className="col-12 col-md-3">
-                                    <TextField
-                                        type="date"
-                                        fullWidth
-                                        size="small"
-                                        label="Start Date"
-                                        value={filters.startDate}
-                                        onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                                        InputLabelProps={{ shrink: true }}
-                                    />
-                                </div>
-                                <div className="col-12 col-md-3">
-                                    <TextField
-                                        type="date"
-                                        fullWidth
-                                        size="small"
-                                        label="End Date"
-                                        value={filters.endDate}
-                                        onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                                        InputLabelProps={{ shrink: true }}
-                                    />
-                                </div>
-                                <div className="col-12 col-md-3">
-                                    <div className="input-group">
-                                        <span className="input-group-text bg-white border-end-0">
-                                            <SearchIcon className="text-muted" />
-                                        </span>
-                                        <input
-                                            type="text"
-                                            className="form-control border-start-0 ps-0"
-                                            placeholder="Search projects..."
-                                            value={searchTerm}
-                                            onChange={handleSearch}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                                        <MenuItem value="Active">Active</MenuItem>
+                                        <MenuItem value="Completed">Completed</MenuItem>
+                                        <MenuItem value="On Hold">On Hold</MenuItem>
+                                    </Select>
+                                </FormControl>
+
+                                <FormControl sx={{ minWidth: 120 }}>
+                                    <InputLabel>Project Type</InputLabel>
+                                    <Select
+                                        value={filters.projectType}
+                                        label="Project Type"
+                                        onChange={(e) => setFilters({ ...filters, projectType: e.target.value })}
+                                    >
+                                        <MenuItem value="">All</MenuItem>
+                                        <MenuItem value="Scrum">Scrum</MenuItem>
+                                        <MenuItem value="Kanban">Kanban</MenuItem>
+                                    </Select>
+                                </FormControl>
+
+                                <TextField
+                                    label="Start Date"
+                                    type="date"
+                                    value={filters.startDate}
+                                    onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+                                    InputLabelProps={{ shrink: true }}
+                                />
+
+                                <TextField
+                                    label="End Date"
+                                    type="date"
+                                    value={filters.endDate}
+                                    onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+                                    InputLabelProps={{ shrink: true }}
+                                />
+                            </Box>
                         </AccordionDetails>
                     </Accordion>
                 </div>
@@ -488,6 +475,28 @@ const ListProject = () => {
                                                 <TimelineIcon />
                                             </IconButton>
                                         </Tooltip>
+                                        {!isDeveloper && (
+                                            <React.Fragment>
+                                                <Tooltip title="Edit Project">
+                                                    <IconButton 
+                                                        size="small" 
+                                                        onClick={() => handleEditProject(project.id)}
+                                                        className="action-button"
+                                                    >
+                                                        <EditIcon />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="Delete Project">
+                                                    <IconButton 
+                                                        size="small" 
+                                                        onClick={() => handleDeleteClick(project)}
+                                                        className="action-button"
+                                                    >
+                                                        <DeleteIcon />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            </React.Fragment>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="card-body">

@@ -150,13 +150,17 @@ const ProjectDetails = () => {
     };
 
     const renderSidebar = () => {
-        const sidebarItems = [
-            { id: 'epics', icon: <AssignmentIcon />, label: 'Epics' },
-            { id: 'backlog', icon: <ViewModuleIcon />, label: 'Backlog' },
-            { id: 'backlogItems', icon: <ListAltIcon />, label: 'Backlog Items' },
-            { id: 'sprints', icon: <BugReportIcon />, label: 'Sprints' },
-            { id: 'issues', icon: <BugIcon />, label: 'Issues' }
-        ];
+        // Filter sidebar items based on project type
+        const sidebarItems = projectType === 'scrum' 
+            ? [
+                { id: 'backlog', icon: <ViewModuleIcon />, label: 'Backlog' },
+                { id: 'backlogItems', icon: <ListAltIcon />, label: 'Backlog Items' },
+                { id: 'sprints', icon: <BugReportIcon />, label: 'Sprints' }
+            ]
+            : [
+                { id: 'epics', icon: <AssignmentIcon />, label: 'Epics' },
+                { id: 'issues', icon: <BugIcon />, label: 'Issues' }
+            ];
 
         return (
             <Box sx={{ 
