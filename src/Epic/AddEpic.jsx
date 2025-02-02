@@ -24,7 +24,7 @@ import epicService from '../service/EpicService';
 import projectService from '../service/ProjectService';
 import issueService from '../service/IssueService';
 
-const AddEpic = ({ open, onClose, projectId: initialProjectId, userId, epic }) => {
+const AddEpic = ({ open, onClose, projectId: initialProjectId, epic }) => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -34,7 +34,6 @@ const AddEpic = ({ open, onClose, projectId: initialProjectId, userId, epic }) =
     const [projects, setProjects] = useState([]);
     const [issues, setIssues] = useState([]);
     const [epicData, setEpicData] = useState({
-        key: '',
         name: '',
         description: '',
         project: initialProjectId || '',
@@ -42,26 +41,34 @@ const AddEpic = ({ open, onClose, projectId: initialProjectId, userId, epic }) =
         priority: 'medium',
         startDate: '',
         dueDate: '',
-        color: '#0052CC', // Default color
+        color: '#0052CC',
         labels: [],
         watchers: [],
         issues: []
     });
 
+    // Load projects and issues
     useEffect(() => {
-        console.log('Loading projects...');
-        loadProjects();
+        const loadData = async () => {
+            try {
+                const [projectsResponse, issuesResponse] = await Promise.all([
+                    projectService.getAll(),
+                    issueService.getAll()
+                ]);
+                setProjects(projectsResponse.data);
+                setIssues(issuesResponse.data);
+            } catch (err) {
+                console.error('Error loading data:', err);
+                setError('Failed to load required data');
+            }
+        };
+        loadData();
     }, []);
 
-    useEffect(() => {
-        console.log('Loading issues...');
-        loadIssues();
-    }, []);
-
+    // Set epic data when editing
     useEffect(() => {
         if (epic) {
             setEpicData({
-                key: epic.key || '',
                 name: epic.name || '',
                 description: epic.description || '',
                 project: epic.project || initialProjectId || '',
@@ -76,7 +83,6 @@ const AddEpic = ({ open, onClose, projectId: initialProjectId, userId, epic }) =
             });
         } else {
             setEpicData({
-                key: '',
                 name: '',
                 description: '',
                 project: initialProjectId || '',
@@ -91,36 +97,6 @@ const AddEpic = ({ open, onClose, projectId: initialProjectId, userId, epic }) =
             });
         }
     }, [epic, initialProjectId]);
-
-    useEffect(() => {
-        if (initialProjectId) {
-            setEpicData(prev => ({ ...prev, project: initialProjectId }));
-        }
-    }, [initialProjectId]);
-
-    const loadProjects = async () => {
-        try {
-            console.log('Loading projects...');
-            const response = await projectService.getAll();
-            console.log('Projects loaded:', response.data);
-            setProjects(response.data);
-        } catch (err) {
-            console.error('Error loading projects:', err);
-            setError('Failed to load projects');
-        }
-    };
-
-    const loadIssues = async () => {
-        try {
-            console.log('Loading issues...');
-            const response = await issueService.getAll();
-            console.log('Issues loaded:', response.data);
-            setIssues(response.data);
-        } catch (err) {
-            console.error('Error loading issues:', err);
-            setError('Failed to load issues');
-        }
-    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -145,76 +121,91 @@ const AddEpic = ({ open, onClose, projectId: initialProjectId, userId, epic }) =
         }
     };
 
-    const validateForm = () => {
-        if (!epicData.name.trim()) {
-            setError('Epic name is required');
-            return false;
-        }
-        if (epicData.startDate && epicData.dueDate && new Date(epicData.startDate) > new Date(epicData.dueDate)) {
-            setError('Start date cannot be after due date');
-            return false;
-        }
-        return true;
-    };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setLoading(true);
         setError('');
         setSuccess('');
-        setLoading(true);
 
-        try { 
-            console.log('Current epicData:', epicData);
+        // Get userId from localStorage
+        const userId = localStorage.getItem('userId');
+        if (!userId) {
+            setError('User not authenticated');
+            setLoading(false);
+            return;
+        }
 
+        // Validate required fields
+        if (!epicData.name?.trim()) {
+            setError('Epic name is required');
+            setLoading(false);
+            return;
+        }
+
+        try {
+            // Prepare data for submission
             const data = {
-                key: epicData.key?.trim() || undefined,
-                name: epicData.name,
-                description: epicData.description,
-                status: epicData.status || 'to do',
-                priority: epicData.priority || 'medium',
+                name: epicData.name.trim(),
+                description: epicData.description?.trim(),
+                status: epicData.status?.toLowerCase() || 'to do',
+                priority: epicData.priority?.toLowerCase() || 'medium',
                 owner: userId,
-                project: epicData.project || null,
-                color: epicData.color,
-                labels: epicData.labels || [],
-                watchers: epicData.watchers || [],
-                issues: epicData.issues || []
+                project: epicData.project || initialProjectId || null,
+                startDate: epicData.startDate || undefined,
+                dueDate: epicData.dueDate || undefined,
+                color: epicData.color || '#0052CC',
+                labels: epicData.labels?.length > 0 ? epicData.labels : undefined,
+                watchers: epicData.watchers?.length > 0 ? epicData.watchers : undefined,
+                issues: epicData.issues?.length > 0 ? epicData.issues : undefined
             };
 
-            if (epicData.startDate) {
-                data.startDate = epicData.startDate;
-            }
-            if (epicData.dueDate) {
-                data.dueDate = epicData.dueDate;
-            }
+            // Remove undefined values
+            Object.keys(data).forEach(key => {
+                if (data[key] === undefined) {
+                    delete data[key];
+                }
+            });
 
-            console.log('Data being sent to server:', data);
+            console.log('Submitting epic data:', data);
 
             let response;
             if (epic) {
                 response = await epicService.update(epic._id, data);
-                console.log('Epic updated response:', response);
+                console.log('Epic updated:', response.data);
                 setSuccess('Epic updated successfully!');
             } else {
                 response = await epicService.create(data);
-                console.log('Epic created response:', response);
+                console.log('Epic created:', response.data);
                 setSuccess('Epic created successfully!');
             }
-            
-            console.log(epic ? 'Epic updated successfully:' : 'Epic created successfully:', response);
-            onClose(true);
+
+            // Only update issues if we have them and we're creating a new epic
+            if (!epic && response.data?._id && epicData.issues?.length > 0) {
+                try {
+                    await Promise.all(epicData.issues.map(issueId =>
+                        issueService.update(issueId, { epic: response.data._id })
+                    ));
+                    console.log('Issues updated successfully');
+                } catch (issueError) {
+                    console.error('Error updating issues:', issueError);
+                    // Don't fail the whole operation if issue update fails
+                }
+            }
+
+            setTimeout(() => {
+                setLoading(false);
+                onClose(true);
+            }, 1000);
         } catch (err) {
-            console.error('Full error object:', err);
-            const errorMessage = err.response?.data?.message || (epic ? 'Failed to update epic' : 'Failed to create epic');
+            console.error('Error submitting epic:', err);
+            const errorMessage = err.response?.data?.message || 'Failed to save epic. Please check all required fields.';
             setError(errorMessage);
-            console.error(epic ? 'Error updating epic:' : 'Error creating epic:', err);
-        } finally {
             setLoading(false);
         }
     };
 
     const handleClose = () => {
         setEpicData({
-            key: '',
             name: '',
             description: '',
             project: initialProjectId || '',
@@ -222,13 +213,14 @@ const AddEpic = ({ open, onClose, projectId: initialProjectId, userId, epic }) =
             priority: 'medium',
             startDate: '',
             dueDate: '',
-            color: '#0052CC', // Default color
+            color: '#0052CC',
             labels: [],
             watchers: [],
             issues: []
         });
         setError('');
-        onClose();
+        setSuccess('');
+        onClose(false);
     };
 
     const getStatusColor = (status) => {

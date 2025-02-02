@@ -24,8 +24,40 @@ const create = (issueData) => {
     return httpClient.post('/issues', issueData);
 };
 
+const transformIssueData = (data) => {
+    const transformed = {
+        title: data.title?.trim(),
+        description: data.description?.trim(),
+        status: data.status?.toLowerCase() || 'to do',
+        priority: (data.priority || 'medium').toLowerCase(),
+        startDate: data.startDate || undefined,
+        dueDate: data.dueDate || undefined,
+        owner: data.owner || localStorage.getItem('userId'),
+        assignee: data.assignee || null,
+        watchers: data.watchers || []
+    };
+
+    // Handle project field separately to preserve null values
+    if (data.project !== undefined) {
+        transformed.project = data.project || null;
+    }
+
+    // Remove undefined values, but keep null values
+    Object.keys(transformed).forEach(key => {
+        if (transformed[key] === undefined) {
+            delete transformed[key];
+        }
+    });
+
+    console.log('Original issue data:', data);
+    console.log('Transformed issue data:', transformed);
+    return transformed;
+};
+
 const update = (issueId, issueData) => {
-    return httpClient.put(`/issues/${issueId}`, issueData);
+    const transformedData = transformIssueData(issueData);
+    console.log('Transformed update data:', transformedData); // Debug log
+    return httpClient.put(`/issues/${issueId}`, transformedData);
 };
 
 const remove = (issueId) => {

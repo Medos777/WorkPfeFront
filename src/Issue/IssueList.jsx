@@ -39,6 +39,9 @@ import IssueService from '../service/IssueService';
 import ProjectService from '../service/ProjectService';
 import UserService from '../service/UserService';
 import { useNavigate, useParams } from 'react-router-dom';
+import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
+import { alpha } from '@mui/material/styles';
 
 const priorityConfig = {
     highest: { color: 'error', icon: '⚡', label: 'Highest' },
@@ -57,6 +60,51 @@ const typeConfig = {
 
 const ITEMS_PER_PAGE = 10;
 
+const STATUS_TYPES = {
+    TODO: 'todo',
+    IN_PROGRESS: 'inprogress',
+    DONE: 'done'
+};
+
+const DISPLAY_STATUS = {
+    [STATUS_TYPES.TODO]: 'To Do',
+    [STATUS_TYPES.IN_PROGRESS]: 'In Progress',
+    [STATUS_TYPES.DONE]: 'Done'
+};
+
+const statusColors = {
+    [STATUS_TYPES.TODO]: '#e5e7eb',
+    [STATUS_TYPES.IN_PROGRESS]: '#fef3c7',
+    [STATUS_TYPES.DONE]: '#d1fae5'
+};
+
+const statusIcons = {
+    [STATUS_TYPES.TODO]: '📋',
+    [STATUS_TYPES.IN_PROGRESS]: '🔄',
+    [STATUS_TYPES.DONE]: '✅'
+};
+
+const avatarColors = ['#1976d2', '#dc004e', '#388e3c', '#f57c00', '#6d1b7b'];
+
+const getAvatarColor = (username) => {
+    const index = username.charCodeAt(0) % avatarColors.length;
+    return avatarColors[index];
+};
+
+// Function to generate consistent colors from strings
+const stringToColor = (string) => {
+    let hash = 0;
+    for (let i = 0; i < string.length; i++) {
+        hash = string.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    let color = '#';
+    for (let i = 0; i < 3; i++) {
+        const value = (hash >> (i * 8)) & 0xFF;
+        color += ('00' + value.toString(16)).substr(-2);
+    }
+    return color;
+};
+
 const IssueList = () => {
     const { projectId } = useParams();
     const [allIssues, setAllIssues] = useState([]);
@@ -74,6 +122,7 @@ const IssueList = () => {
     const [anchorEl, setAnchorEl] = useState(null);
     const [selectedIssue, setSelectedIssue] = useState(null);
     const navigate = useNavigate();
+    const [viewMode, setViewMode] = useState('table');
 
     // Get user role and ID from localStorage
     const userRole = localStorage.getItem('role');
@@ -104,16 +153,46 @@ const IssueList = () => {
             return matchesProject && matchesEpic && matchesType && matchesStatus && matchesSearch;
         });
 
-        // Stocker les résultats filtrés dans le localStorage
-        const filteredIssuesData = {
-            timestamp: new Date().toISOString(),
-            userRole,
-            userId,
-            issues: filtered
-        };
-        localStorage.setItem('filteredIssues', JSON.stringify(filteredIssuesData));
-
         return filtered;
+    };
+
+    const handleStatusChange = async (issueId, newStatus) => {
+        try {
+            const currentIssue = allIssues.find(issue => issue._id === issueId);
+            if (!currentIssue) return;
+
+            // Store in cookies
+            document.cookie = `issue_status_${issueId}=${newStatus}; max-age=604800; path=/`; // 7 days expiry
+
+            // Update UI
+            setAllIssues(prevIssues => 
+                prevIssues.map(issue => 
+                    issue._id === issueId 
+                        ? { ...issue, status: newStatus }
+                        : issue
+                )
+            );
+
+            // Update backend
+            const updateData = {
+                title: currentIssue.title,
+                description: currentIssue.description,
+                status: newStatus,
+                priority: currentIssue.priority,
+                projectId: currentIssue.projectId,
+                epicId: currentIssue.epicId,
+                assignee: currentIssue.assignee,
+                reporter: currentIssue.reporter,
+                owner: localStorage.getItem('userId'),
+                storyPoints: currentIssue.storyPoints,
+                dueDate: currentIssue.dueDate
+            };
+
+            await IssueService.update(issueId, updateData);
+            console.log('Status updated successfully in backend and stored in cookies');
+        } catch (error) {
+            console.error('Error updating status:', error);
+        }
     };
 
     useEffect(() => {
@@ -137,9 +216,8 @@ const IssueList = () => {
                 const epicsFromIssues = allIssuesRes.data.filter(issue => issue.type === 'epic');
                 setEpics(epicsFromIssues);
                 
-                // Appliquer les filtres aux nouvelles données
+                // Apply initial filters
                 const filtered = applyFilters(allIssuesRes.data);
-                console.log('Filtered Issues:', filtered);
                 setFilteredIssues(filtered);
             } catch (error) {
                 console.error('Error fetching data:', error);
@@ -168,6 +246,160 @@ const IssueList = () => {
     const handleEpicChange = (event) => {
         setEpicFilter(event.target.value);
         setProjectFilter('all');
+    };
+
+    const toggleViewMode = () => {
+        setViewMode(prevMode => (prevMode === 'table' ? 'card' : 'table'));
+    };
+
+    const CardView = ({ issue }) => {
+        const [{ isDragging }, drag] = useDrag({
+            type: 'issue',
+            item: { 
+                id: issue._id,
+                currentStatus: issue.status 
+            },
+            collect: (monitor) => ({
+                isDragging: monitor.isDragging(),
+            }),
+        });
+
+        const assignee = users.find(user => user._id === issue.assignee);
+
+        return (
+            <Box
+                ref={drag}
+                sx={{
+                    opacity: isDragging ? 0.4 : 1,
+                    cursor: 'move',
+                    bgcolor: 'background.paper',
+                    p: 2,
+                    m: 1,
+                    borderRadius: 2,
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                        boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
+                        transform: 'translateY(-2px)'
+                    },
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1
+                }}
+            >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                        {issue.key}
+                    </Typography>
+                    <Chip
+                        size="small"
+                        label={issue.priority}
+                        color={priorityConfig[issue.priority.toLowerCase()]?.color || 'default'}
+                        sx={{ height: 24 }}
+                    />
+                </Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'medium', mb: 1 }}>
+                    {issue.title}
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 'auto' }}>
+                    {assignee ? (
+                        <Tooltip title={assignee.username}>
+                            <Avatar
+                                sx={{ 
+                                    width: 24, 
+                                    height: 24,
+                                    bgcolor: getAvatarColor(assignee.username),
+                                    fontSize: '0.875rem'
+                                }}
+                            >
+                                {assignee.username.charAt(0).toUpperCase()}
+                            </Avatar>
+                        </Tooltip>
+                    ) : (
+                        <Avatar sx={{ width: 24, height: 24, bgcolor: 'grey.300' }}>-</Avatar>
+                    )}
+                    {issue.storyPoints && (
+                        <Chip
+                            size="small"
+                            label={`${issue.storyPoints} pts`}
+                            variant="outlined"
+                            sx={{ height: 24 }}
+                        />
+                    )}
+                </Box>
+            </Box>
+        );
+    };
+
+    const StatusColumn = ({ status, issues }) => {
+        const [{ isOver }, drop] = useDrop({
+            accept: 'issue',
+            drop: (item) => {
+                if (item.currentStatus !== status) {
+                    handleStatusChange(item.id, status);
+                }
+            },
+            collect: (monitor) => ({
+                isOver: monitor.isOver()
+            })
+        });
+
+        return (
+            <Box
+                ref={drop}
+                sx={{
+                    width: '33%',
+                    minHeight: 500,
+                    p: 2,
+                    bgcolor: isOver ? alpha(statusColors[status], 0.7) : statusColors[status],
+                    borderRadius: 2,
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1
+                }}
+            >
+                <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 1,
+                    mb: 2,
+                    px: 2,
+                    py: 1,
+                    bgcolor: 'background.paper',
+                    borderRadius: 1,
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                }}>
+                    <Typography variant="h6" sx={{ 
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        color: 'text.primary',
+                        fontWeight: 'medium'
+                    }}>
+                        {statusIcons[status]} {DISPLAY_STATUS[status]}
+                    </Typography>
+                    <Chip
+                        size="small"
+                        label={issues.length}
+                        color="primary"
+                        variant="outlined"
+                        sx={{ ml: 'auto' }}
+                    />
+                </Box>
+                <Box sx={{ 
+                    bgcolor: 'background.paper',
+                    borderRadius: 2,
+                    minHeight: 400,
+                    p: 1,
+                    overflowY: 'auto'
+                }}>
+                    {issues.map((issue) => (
+                        <CardView key={issue._id} issue={issue} />
+                    ))}
+                </Box>
+            </Box>
+        );
     };
 
     return (
@@ -260,163 +492,198 @@ const IssueList = () => {
                             label="Status"
                         >
                             <MenuItem value="all">All Statuses</MenuItem>
-                            <MenuItem value="todo">To Do</MenuItem>
-                            <MenuItem value="in_progress">In Progress</MenuItem>
-                            <MenuItem value="done">Done</MenuItem>
+                            <MenuItem value={STATUS_TYPES.TODO}>{DISPLAY_STATUS[STATUS_TYPES.TODO]}</MenuItem>
+                            <MenuItem value={STATUS_TYPES.IN_PROGRESS}>{DISPLAY_STATUS[STATUS_TYPES.IN_PROGRESS]}</MenuItem>
+                            <MenuItem value={STATUS_TYPES.DONE}>{DISPLAY_STATUS[STATUS_TYPES.DONE]}</MenuItem>
                         </Select>
                     </FormControl>
                 </Grid>
             </Grid>
 
-            <TableContainer>
-                <Table sx={{ minWidth: 750 }} aria-labelledby="tableTitle">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>Key</TableCell>
-                            <TableCell>Type</TableCell>
-                            <TableCell>Title</TableCell>
-                            <TableCell>Priority</TableCell>
-                            <TableCell>Status</TableCell>
-                            <TableCell>Assignee</TableCell>
-                            <TableCell>Reporter</TableCell>
-                            <TableCell>Story Points</TableCell>
-                            <TableCell>Due Date</TableCell>
-                            <TableCell>Created</TableCell>
-                            <TableCell>Actions</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {loading ? (
+            <Button variant="contained" onClick={toggleViewMode}>
+                Toggle to {viewMode === 'table' ? 'Card' : 'Table'} View
+            </Button>
+
+            {viewMode === 'table' ? (
+                <TableContainer>
+                    <Table sx={{ minWidth: 750 }} aria-labelledby="tableTitle">
+                        <TableHead>
                             <TableRow>
-                                <TableCell colSpan={12} align="center">
-                                    <CircularProgress />
-                                </TableCell>
+                                <TableCell>Key</TableCell>
+                                <TableCell>Type</TableCell>
+                                <TableCell>Title</TableCell>
+                                <TableCell>Priority</TableCell>
+                                <TableCell>Status</TableCell>
+                                <TableCell>Assignee</TableCell>
+                                <TableCell>Reporter</TableCell>
+                                <TableCell>Story Points</TableCell>
+                                <TableCell>Due Date</TableCell>
+                                <TableCell>Created</TableCell>
+                                <TableCell>Actions</TableCell>
                             </TableRow>
-                        ) : filteredIssues.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={12} align="center">
-                                    <Typography variant="body1" color="textSecondary">
-                                        No issues found
-                                    </Typography>
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            filteredIssues
-                                .slice(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE)
-                                .map((issue) => (
-                                    <TableRow
-                                        hover
-                                        key={issue._id}
-                                        sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-                                    >
-                                        <TableCell>{issue.key || 'N/A'}</TableCell>
-                                        <TableCell>
-                                            {issue.type && typeConfig[issue.type] ? (
-                                                <Tooltip title={typeConfig[issue.type].label}>
-                                                    <IconButton size="small" color={typeConfig[issue.type].color}>
-                                                        {typeConfig[issue.type].icon}
+                        </TableHead>
+                        <TableBody>
+                            {loading ? (
+                                <TableRow>
+                                    <TableCell colSpan={12} align="center">
+                                        <CircularProgress />
+                                    </TableCell>
+                                </TableRow>
+                            ) : filteredIssues.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={12} align="center">
+                                        <Typography variant="body1" color="textSecondary">
+                                            No issues found
+                                        </Typography>
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                filteredIssues
+                                    .slice(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE)
+                                    .map((issue) => (
+                                        <TableRow
+                                            hover
+                                            key={issue._id}
+                                            sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                                        >
+                                            <TableCell>{issue.key || 'N/A'}</TableCell>
+                                            <TableCell>
+                                                {issue.type && typeConfig[issue.type] ? (
+                                                    <Tooltip title={typeConfig[issue.type].label}>
+                                                        <IconButton size="small" color={typeConfig[issue.type].color}>
+                                                            {typeConfig[issue.type].icon}
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                ) : (
+                                                    <IconButton size="small" disabled>
+                                                        <Assignment />
                                                     </IconButton>
-                                                </Tooltip>
-                                            ) : (
-                                                <IconButton size="small" disabled>
-                                                    <Assignment />
+                                                )}
+                                            </TableCell>
+                                            <TableCell>{issue.title || 'Untitled'}</TableCell>
+                                            <TableCell>
+                                                {issue.priority && priorityConfig[issue.priority] ? (
+                                                    <Chip
+                                                        size="small"
+                                                        label={priorityConfig[issue.priority].label}
+                                                        color={priorityConfig[issue.priority].color}
+                                                        icon={<span>{priorityConfig[issue.priority].icon}</span>}
+                                                    />
+                                                ) : (
+                                                    <Chip
+                                                        size="small"
+                                                        label="None"
+                                                        color="default"
+                                                    />
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Select
+                                                    value={issue.status}
+                                                    onChange={(e) => handleStatusChange(issue._id, e.target.value)}
+                                                >
+                                                    <MenuItem value={STATUS_TYPES.TODO}>{DISPLAY_STATUS[STATUS_TYPES.TODO]}</MenuItem>
+                                                    <MenuItem value={STATUS_TYPES.IN_PROGRESS}>{DISPLAY_STATUS[STATUS_TYPES.IN_PROGRESS]}</MenuItem>
+                                                    <MenuItem value={STATUS_TYPES.DONE}>{DISPLAY_STATUS[STATUS_TYPES.DONE]}</MenuItem>
+                                                </Select>
+                                            </TableCell>
+                                            <TableCell>
+                                                {issue.assignee ? (
+                                                    <Tooltip title={(getUserById(issue.assignee)?.email) || 'Unknown'}>
+                                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                            {console.log('Assignee ID:', issue.assignee)}
+                                                            {console.log('Assignee User:', getUserById(issue.assignee))}
+                                                            <Avatar
+                                                                sx={{ width: 24, height: 24, mr: 1 }}
+                                                                alt={(getUserById(issue.assignee)?.email) || 'Unknown'}
+                                                            >
+                                                                {(getUserById(issue.assignee)?.email?.charAt(0)) || '?'}
+                                                            </Avatar>
+                                                            <Typography variant="body2">
+                                                                {(getUserById(issue.assignee)?.email) || 'Unknown'}
+                                                            </Typography>
+                                                        </Box>
+                                                    </Tooltip>
+                                                ) : (
+                                                    <Tooltip title="Unassigned">
+                                                        <Avatar sx={{ width: 24, height: 24 }}>?</Avatar>
+                                                    </Tooltip>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                {issue.reporter ? (
+                                                    <Tooltip title={(getUserById(issue.reporter)?.email) || 'Unknown'}>
+                                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                            {console.log('Reporter ID:', issue.reporter)}
+                                                            {console.log('Reporter User:', getUserById(issue.reporter))}
+                                                            <Avatar
+                                                                sx={{ width: 24, height: 24, mr: 1 }}
+                                                                alt={(getUserById(issue.reporter)?.email) || 'Unknown'}
+                                                            >
+                                                                {(getUserById(issue.reporter)?.email?.charAt(0)) || '?'}
+                                                            </Avatar>
+                                                            <Typography variant="body2">
+                                                                {(getUserById(issue.reporter)?.email) || 'Unknown'}
+                                                            </Typography>
+                                                        </Box>
+                                                    </Tooltip>
+                                                ) : (
+                                                    <Tooltip title="No Reporter">
+                                                        <Avatar sx={{ width: 24, height: 24 }}>?</Avatar>
+                                                    </Tooltip>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>{issue.storyPoints || '-'}</TableCell>
+                                            <TableCell>
+                                                {issue.dueDate ? format(new Date(issue.dueDate), 'MMM d, yyyy') : '-'}
+                                            </TableCell>
+                                            <TableCell>
+                                                {issue.createdAt ? format(new Date(issue.createdAt), 'MMM d, yyyy') : 'N/A'}
+                                            </TableCell>
+                                            <TableCell>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(event) => {
+                                                        setAnchorEl(event.currentTarget);
+                                                        setSelectedIssue(issue);
+                                                    }}
+                                                >
+                                                    <MoreVert />
                                                 </IconButton>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>{issue.title || 'Untitled'}</TableCell>
-                                        <TableCell>
-                                            {issue.priority && priorityConfig[issue.priority] ? (
-                                                <Chip
-                                                    size="small"
-                                                    label={priorityConfig[issue.priority].label}
-                                                    color={priorityConfig[issue.priority].color}
-                                                    icon={<span>{priorityConfig[issue.priority].icon}</span>}
-                                                />
-                                            ) : (
-                                                <Chip
-                                                    size="small"
-                                                    label="None"
-                                                    color="default"
-                                                />
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                size="small"
-                                                label={issue.status || 'No Status'}
-                                                color={issue.status?.toLowerCase() === 'done' ? 'success' : 'default'}
-                                            />
-                                        </TableCell>
-                                        <TableCell>
-                                            {issue.assignee ? (
-                                                <Tooltip title={(getUserById(issue.assignee)?.email) || 'Unknown'}>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                        {console.log('Assignee ID:', issue.assignee)}
-                                                        {console.log('Assignee User:', getUserById(issue.assignee))}
-                                                        <Avatar
-                                                            sx={{ width: 24, height: 24, mr: 1 }}
-                                                            alt={(getUserById(issue.assignee)?.email) || 'Unknown'}
-                                                        >
-                                                            {(getUserById(issue.assignee)?.email?.charAt(0)) || '?'}
-                                                        </Avatar>
-                                                        <Typography variant="body2">
-                                                            {(getUserById(issue.assignee)?.email) || 'Unknown'}
-                                                        </Typography>
-                                                    </Box>
-                                                </Tooltip>
-                                            ) : (
-                                                <Tooltip title="Unassigned">
-                                                    <Avatar sx={{ width: 24, height: 24 }}>?</Avatar>
-                                                </Tooltip>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {issue.reporter ? (
-                                                <Tooltip title={(getUserById(issue.reporter)?.email) || 'Unknown'}>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                        {console.log('Reporter ID:', issue.reporter)}
-                                                        {console.log('Reporter User:', getUserById(issue.reporter))}
-                                                        <Avatar
-                                                            sx={{ width: 24, height: 24, mr: 1 }}
-                                                            alt={(getUserById(issue.reporter)?.email) || 'Unknown'}
-                                                        >
-                                                            {(getUserById(issue.reporter)?.email?.charAt(0)) || '?'}
-                                                        </Avatar>
-                                                        <Typography variant="body2">
-                                                            {(getUserById(issue.reporter)?.email) || 'Unknown'}
-                                                        </Typography>
-                                                    </Box>
-                                                </Tooltip>
-                                            ) : (
-                                                <Tooltip title="No Reporter">
-                                                    <Avatar sx={{ width: 24, height: 24 }}>?</Avatar>
-                                                </Tooltip>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>{issue.storyPoints || '-'}</TableCell>
-                                        <TableCell>
-                                            {issue.dueDate ? format(new Date(issue.dueDate), 'MMM d, yyyy') : '-'}
-                                        </TableCell>
-                                        <TableCell>
-                                            {issue.createdAt ? format(new Date(issue.createdAt), 'MMM d, yyyy') : 'N/A'}
-                                        </TableCell>
-                                        <TableCell>
-                                            <IconButton
-                                                size="small"
-                                                onClick={(event) => {
-                                                    setAnchorEl(event.currentTarget);
-                                                    setSelectedIssue(issue);
-                                                }}
-                                            >
-                                                <MoreVert />
-                                            </IconButton>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                        )}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            ) : (
+                <DndProvider backend={HTML5Backend}>
+                    <Box sx={{ 
+                        display: 'flex', 
+                        gap: 3,
+                        mt: 3,
+                        px: 2,
+                        minHeight: 'calc(100vh - 200px)',
+                        bgcolor: '#f3f4f6',
+                        borderRadius: 2,
+                        p: 3
+                    }}>
+                        <StatusColumn
+                            status={STATUS_TYPES.TODO}
+                            issues={filteredIssues.filter(issue => issue.status === STATUS_TYPES.TODO)}
+                        />
+                        <StatusColumn
+                            status={STATUS_TYPES.IN_PROGRESS}
+                            issues={filteredIssues.filter(issue => issue.status === STATUS_TYPES.IN_PROGRESS)}
+                        />
+                        <StatusColumn
+                            status={STATUS_TYPES.DONE}
+                            issues={filteredIssues.filter(issue => issue.status === STATUS_TYPES.DONE)}
+                        />
+                    </Box>
+                </DndProvider>
+            )}
 
             <TablePagination
                 rowsPerPageOptions={[5, 10, 25]}

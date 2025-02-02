@@ -35,6 +35,7 @@ import {
     Divider,
     Alert,
     CircularProgress,
+    LinearProgress,
     TextField,
     Breadcrumbs,
     Link,
@@ -74,6 +75,7 @@ import ProjectService from '../service/ProjectService';
 import SprintService from '../service/SprintService';
 import EpicService from '../service/EpicService';
 import BacklogService from '../service/BacklogService';
+import BacklogItemService from '../service/BacklogItemService';
 import AddEpic from '../Epic/AddEpic';
 import AddBacklog from '../Backlog/AddBacklog';
 import StatusColumn from './StatusColumn';
@@ -90,6 +92,7 @@ const ProjectDetails = () => {
     const [project, setProject] = useState(null);
     const [epics, setEpics] = useState([]);
     const [backlogs, setBacklogs] = useState([]);
+    const [backlogItems, setBacklogItems] = useState([]);
     const [sprints, setSprints] = useState([]);
     const [issues, setIssues] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -126,7 +129,7 @@ const ProjectDetails = () => {
     const DISPLAY_STATUS = {
         'to do': 'To Do',
         'in progress': 'In Progress',
-        'done': 'Completed'
+        'done': 'Done'
     };
 
     const getItemIcon = (item) => {
@@ -139,6 +142,8 @@ const ProjectDetails = () => {
                 return <BugReportIcon />;
             case 'issues':
                 return <BugIcon />;
+            case 'backlogItems':
+                return <ListAltIcon />;
             default:
                 return null;
         }
@@ -148,6 +153,7 @@ const ProjectDetails = () => {
         const sidebarItems = [
             { id: 'epics', icon: <AssignmentIcon />, label: 'Epics' },
             { id: 'backlog', icon: <ViewModuleIcon />, label: 'Backlog' },
+            { id: 'backlogItems', icon: <ListAltIcon />, label: 'Backlog Items' },
             { id: 'sprints', icon: <BugReportIcon />, label: 'Sprints' },
             { id: 'issues', icon: <BugIcon />, label: 'Issues' }
         ];
@@ -293,13 +299,17 @@ const ProjectDetails = () => {
     useEffect(() => {
         if (epics.length > 0) {
             const grouped = {
-                'to do': epics.filter(epic => epic.status === 'to do'),
-                'in progress': epics.filter(epic => epic.status === 'in progress'),
-                'done': epics.filter(epic => epic.status === 'done')
+                'to do': epics.filter(epic => epic.status === STATUS.TODO),
+                'in progress': epics.filter(epic => epic.status === STATUS.IN_PROGRESS),
+                'done': epics.filter(epic => epic.status === STATUS.DONE)
             };
             setEpicsByStatus(grouped);
         }
     }, [epics]);
+
+    const getStatusDisplay = (status) => {
+        return DISPLAY_STATUS[status] || DISPLAY_STATUS['to do'];
+    };
 
     const handleStatusChange = async (epicId, newStatus) => {
         try {
@@ -315,9 +325,9 @@ const ProjectDetails = () => {
 
             // Update epicsByStatus
             const newEpicsByStatus = {
-                'to do': updatedEpics.filter(e => e.status === 'to do'),
-                'in progress': updatedEpics.filter(e => e.status === 'in progress'),
-                'done': updatedEpics.filter(e => e.status === 'done')
+                'to do': updatedEpics.filter(e => e.status === STATUS.TODO),
+                'in progress': updatedEpics.filter(e => e.status === STATUS.IN_PROGRESS),
+                'done': updatedEpics.filter(e => e.status === STATUS.DONE)
             };
             setEpicsByStatus(newEpicsByStatus);
 
@@ -334,15 +344,6 @@ const ProjectDetails = () => {
             setEpics(originalEpics);
             setError('Failed to update epic status');
         }
-    };
-
-    const getStatusDisplay = (backendStatus) => {
-        const statusMap = {
-            'todo': 'to do',
-            'progress': 'in progress',
-            'done': 'completed'
-        };
-        return statusMap[backendStatus] || 'to do';
     };
 
     const handleEpicClick = (epic) => {
@@ -380,9 +381,9 @@ const ProjectDetails = () => {
 
             // Update epicsByStatus
             const newEpicsByStatus = {
-                'to do': updatedEpics.filter(e => e.status === 'to do'),
-                'in progress': updatedEpics.filter(e => e.status === 'in progress'),
-                'done': updatedEpics.filter(e => e.status === 'done')
+                'to do': updatedEpics.filter(e => e.status === STATUS.TODO),
+                'in progress': updatedEpics.filter(e => e.status === STATUS.IN_PROGRESS),
+                'done': updatedEpics.filter(e => e.status === STATUS.DONE)
             };
             setEpicsByStatus(newEpicsByStatus);
 
@@ -803,27 +804,27 @@ const ProjectDetails = () => {
             minHeight: 600
         }}>
             <StatusColumn
-                status="to do"
+                status={STATUS.TODO}
                 title="To Do"
-                epics={epicsByStatus['to do']}
+                epics={epicsByStatus[STATUS.TODO]}
                 onDrop={handleDrop}
                 onEpicClick={handleEpicClick}
                 onEditClick={handleEditEpic}
                 onDeleteClick={handleDeleteEpic}
             />
             <StatusColumn
-                status="in progress"
+                status={STATUS.IN_PROGRESS}
                 title="In Progress"
-                epics={epicsByStatus['in progress']}
+                epics={epicsByStatus[STATUS.IN_PROGRESS]}
                 onDrop={handleDrop}
                 onEpicClick={handleEpicClick}
                 onEditClick={handleEditEpic}
                 onDeleteClick={handleDeleteEpic}
             />
             <StatusColumn
-                status="done"
+                status={STATUS.DONE}
                 title="Done"
-                epics={epicsByStatus['done']}
+                epics={epicsByStatus[STATUS.DONE]}
                 onDrop={handleDrop}
                 onEpicClick={handleEpicClick}
                 onEditClick={handleEditEpic}
@@ -1185,7 +1186,7 @@ const ProjectDetails = () => {
         if (!epics || epics.length === 0) {
             return (
                 <Box sx={{ p: 2, textAlign: 'center' }}>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body1" color="textSecondary">
                         No epics found
                     </Typography>
                 </Box>
@@ -1216,20 +1217,20 @@ const ProjectDetails = () => {
                                     <TableCell>
                                         <FormControl size="small" onClick={(e) => e.stopPropagation()}>
                                             <Select
-                                                value={epic.status || 'to do'}
+                                                value={epic.status || STATUS.TODO}
                                                 onChange={(e) => handleEpicStatusChange(epic._id, e.target.value)}
                                                 sx={{
                                                     minWidth: 120,
                                                     bgcolor: 
-                                                        epic.status === 'done' ? '#dcfce7' :
-                                                        epic.status === 'in progress' ? '#dbeafe' : '#f1f5f9',
-                                                    color: epic.status === 'to do' ? '#1e293b' : 'white',
+                                                        epic.status === STATUS.DONE ? '#dcfce7' :
+                                                        epic.status === STATUS.IN_PROGRESS ? '#dbeafe' : '#f1f5f9',
+                                                    color: epic.status === STATUS.TODO ? '#1e293b' : 'white',
                                                     fontWeight: 500
                                                 }}
                                             >
-                                                <MenuItem value="to do">To Do</MenuItem>
-                                                <MenuItem value="in progress">In Progress</MenuItem>
-                                                <MenuItem value="done">Done</MenuItem>
+                                                <MenuItem value={STATUS.TODO}>To Do</MenuItem>
+                                                <MenuItem value={STATUS.IN_PROGRESS}>In Progress</MenuItem>
+                                                <MenuItem value={STATUS.DONE}>Done</MenuItem>
                                             </Select>
                                         </FormControl>
                                     </TableCell>
@@ -1668,9 +1669,9 @@ const ProjectDetails = () => {
             
             // Update epicsByStatus
             const newEpicsByStatus = {
-                'to do': updatedEpics.filter(e => e.status === 'to do'),
-                'in progress': updatedEpics.filter(e => e.status === 'in progress'),
-                'done': updatedEpics.filter(e => e.status === 'done')
+                'to do': updatedEpics.filter(e => e.status === STATUS.TODO),
+                'in progress': updatedEpics.filter(e => e.status === STATUS.IN_PROGRESS),
+                'done': updatedEpics.filter(e => e.status === STATUS.DONE)
             };
             setEpicsByStatus(newEpicsByStatus);
             
@@ -1692,9 +1693,9 @@ const ProjectDetails = () => {
             
             // Update epicsByStatus
             const newEpicsByStatus = {
-                'to do': updatedEpics.filter(e => e.status === 'to do'),
-                'in progress': updatedEpics.filter(e => e.status === 'in progress'),
-                'done': updatedEpics.filter(e => e.status === 'done')
+                'to do': updatedEpics.filter(e => e.status === STATUS.TODO),
+                'in progress': updatedEpics.filter(e => e.status === STATUS.IN_PROGRESS),
+                'done': updatedEpics.filter(e => e.status === STATUS.DONE)
             };
             setEpicsByStatus(newEpicsByStatus);
         } catch (error) {
@@ -1720,239 +1721,383 @@ const ProjectDetails = () => {
     };
 
     const renderContent = () => {
-        if (!selectedType) return null;
-
-        return (
-            <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-                {selectedType === 'sprints' && selectedItem && (
-                    <Button
-                        onClick={handleBackToSprints}
-                        startIcon={<ArrowBackIcon />}
-                        sx={{ mb: 2 }}
-                    >
-                        Back to Sprints
-                    </Button>
-                )}
-                
-                {selectedType === 'epics' && (
-                    renderEpicContent()
-                )}
-                
-                {selectedType === 'sprints' && (
-                    selectedItem ? renderMainContent() : renderSprintContent()
-                )}
-                
-                {selectedType === 'backlog' && (
-                    <Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                            <Typography variant="h6" sx={{ color: '#1e293b' }}>
-                                Product Backlog
-                            </Typography>
-                            <Button
-                                variant="contained"
-                                onClick={() => setAddBacklogDialogOpen(true)}
-                                startIcon={<AddIcon />}
-                                sx={{
-                                    bgcolor: '#3b82f6',
-                                    fontWeight: 600,
-                                    boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
-                                    '&:hover': { 
-                                        bgcolor: '#2563eb',
-                                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)'
-                                    }
-                                }}
-                            >
-                                Add Backlog Item
-                            </Button>
-                        </Box>
-                        {renderBacklogContent()}
-                    </Box>
-                )}
-
-                {selectedType === 'issues' && (
-                    <Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                            <Typography variant="h6" sx={{ color: '#1e293b' }}>
-                                Project Issues
-                            </Typography>
-                            <Button
-                                variant="contained"
-                                onClick={() => setAddIssueDialogOpen(true)}
-                                startIcon={<AddIcon />}
-                                sx={{
-                                    bgcolor: '#3b82f6',
-                                    fontWeight: 600,
-                                    boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
-                                    '&:hover': { 
-                                        bgcolor: '#2563eb',
-                                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)'
-                                    }
-                                }}
-                            >
-                                Create Issue
-                            </Button>
-                        </Box>
-                        <IssueList projectId={project.id} />
-                    </Box>
-                )}
-            </Box>
-        );
-    };
-
-    const renderIssuesContent = () => {
-        if (!issues || issues.length === 0) {
-            return (
-                <Box sx={{ p: 2, textAlign: 'center' }}>
-                    <Typography variant="body1" color="textSecondary">
-                        No issues found
-                    </Typography>
-                </Box>
-            );
+        if (loading) {
+            return <CircularProgress />;
         }
 
+        if (error) {
+            return <Alert severity="error">{error}</Alert>;
+        }
+
+        switch (selectedType) {
+            case 'epics':
+                return renderEpicContent();
+            case 'backlog':
+                return renderBacklogContent();
+            case 'sprints':
+                return (
+                    <Box sx={{ p: 3 }}>
+                        <Typography variant="h5" sx={{ mb: 3 }}>Sprints</Typography>
+                        <Grid container spacing={3}>
+                            {sprints.map((sprint) => (
+                                <Grid item xs={12} md={6} lg={4} key={sprint._id}>
+                                    <Card 
+                                        sx={{ 
+                                            height: '100%',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            position: 'relative'
+                                        }}
+                                    >
+                                        <CardContent sx={{ flexGrow: 1 }}>
+                                            <Typography variant="h6" gutterBottom>
+                                                {sprint.name}
+                                            </Typography>
+                                            <Box sx={{ mb: 2 }}>
+                                                <Typography variant="body2" color="text.secondary" gutterBottom>
+                                                    Progress
+                                                </Typography>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <Box sx={{ flexGrow: 1 }}>
+                                                        <LinearProgress 
+                                                            variant="determinate" 
+                                                            value={sprint.progress || 0}
+                                                            sx={{
+                                                                height: 8,
+                                                                borderRadius: 4,
+                                                                backgroundColor: '#e2e8f0',
+                                                                '& .MuiLinearProgress-bar': {
+                                                                    backgroundColor: 
+                                                                        sprint.progress === 100 ? '#059669' :
+                                                                        sprint.progress >= 70 ? '#3b82f6' :
+                                                                        sprint.progress >= 30 ? '#f59e0b' : '#ef4444',
+                                                                    borderRadius: 4
+                                                                }
+                                                            }}
+                                                        />
+                                                    </Box>
+                                                    <Typography 
+                                                        variant="body2" 
+                                                        sx={{ 
+                                                            minWidth: 40,
+                                                            color: 
+                                                                sprint.progress === 100 ? '#059669' :
+                                                                sprint.progress >= 70 ? '#3b82f6' :
+                                                                sprint.progress >= 30 ? '#f59e0b' : '#ef4444'
+                                                        }}
+                                                    >
+                                                        {sprint.progress || 0}%
+                                                    </Typography>
+                                                </Box>
+                                            </Box>
+                                            <Typography variant="body2" color="text.secondary">
+                                                Start Date: {new Date(sprint.startDate).toLocaleDateString()}
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                End Date: {new Date(sprint.endDate).toLocaleDateString()}
+                                            </Typography>
+                                        </CardContent>
+                                        <CardActions>
+                                            <Button 
+                                                size="small" 
+                                                startIcon={<VisibilityIcon />}
+                                                onClick={() => handleSprintClick(sprint)}
+                                            >
+                                                View Details
+                                            </Button>
+                                        </CardActions>
+                                    </Card>
+                                </Grid>
+                            ))}
+                        </Grid>
+                    </Box>
+                );
+            case 'backlogItems':
+                return (
+                    <Box sx={{ p: 3 }}>
+                        <Typography variant="h5" sx={{ mb: 3 }}>Backlog Items</Typography>
+                        {backlogItems.length === 0 ? (
+                            <Alert severity="info">No backlog items found for this project</Alert>
+                        ) : (
+                            <TableContainer component={Paper}>
+                                <Table>
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell>Title</TableCell>
+                                            <TableCell>Description</TableCell>
+                                            <TableCell>Type</TableCell>
+                                            <TableCell>Status</TableCell>
+                                            <TableCell>Effort</TableCell>
+                                            <TableCell>Actions</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {backlogItems.map((item) => (
+                                            <TableRow key={item._id}>
+                                                <TableCell>{item.title}</TableCell>
+                                                <TableCell>{item.description}</TableCell>
+                                                <TableCell>
+                                                    <Chip 
+                                                        label={item.type} 
+                                                        size="small"
+                                                        color={
+                                                            item.type === 'bug' ? 'error' :
+                                                            item.type === 'story' ? 'primary' : 'default'
+                                                        }
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <FormControl size="small">
+                                                        <Select
+                                                            value={item.status || STATUS.TODO}
+                                                            onChange={(e) => handleBacklogItemStatusChange(item._id, e.target.value)}
+                                                            sx={{
+                                                                minWidth: 120,
+                                                                '& .MuiSelect-select': {
+                                                                    py: 1,
+                                                                    bgcolor: 
+                                                                        item.status === STATUS.DONE ? '#dcfce7' :
+                                                                        item.status === STATUS.IN_PROGRESS ? '#dbeafe' : '#f1f5f9',
+                                                                    color: 
+                                                                        item.status === STATUS.DONE ? '#059669' :
+                                                                        item.status === STATUS.IN_PROGRESS ? '#2563eb' : '#475569',
+                                                                }
+                                                            }}
+                                                        >
+                                                            <MenuItem value={STATUS.TODO}>To Do</MenuItem>
+                                                            <MenuItem value={STATUS.IN_PROGRESS}>In Progress</MenuItem>
+                                                            <MenuItem value={STATUS.DONE}>Done</MenuItem>
+                                                        </Select>
+                                                    </FormControl>
+                                                </TableCell>
+                                                <TableCell>{item.effortEstimate}</TableCell>
+                                                <TableCell>
+                                                    <IconButton 
+                                                        size="small" 
+                                                        onClick={() => handleEditBacklogItem(item)}
+                                                    >
+                                                        <EditIcon />
+                                                    </IconButton>
+                                                    <IconButton 
+                                                        size="small" 
+                                                        onClick={() => handleDeleteBacklogItem(item._id)}
+                                                    >
+                                                        <DeleteIcon />
+                                                    </IconButton>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        )}
+                    </Box>
+                );
+            case 'issues':
+                return (
+                    <Box sx={{ p: 3 }}>
+                        <IssueList projectId={project.id} />
+                    </Box>
+                );
+            default:
+                return null;
+        }
+    };
+
+    const handleBacklogItemStatusChange = async (itemId, newStatus) => {
+        try {
+            console.log('Updating item:', itemId, 'with status:', newStatus);
+            const itemToUpdate = backlogItems.find(item => item._id === itemId);
+            if (!itemToUpdate) {
+                console.error('Item not found:', itemId);
+                return;
+            }
+
+            console.log('Found item to update:', itemToUpdate);
+
+            // Create a complete update object with all required fields
+            const updatedItem = {
+                title: itemToUpdate.title,
+                description: itemToUpdate.description,
+                type: itemToUpdate.type || 'story',
+                status: newStatus,
+                effortEstimate: itemToUpdate.effortEstimate || 0,
+                project: itemToUpdate.project,
+                sprint: itemToUpdate.sprint,
+                assignedTo: itemToUpdate.assignedTo
+            };
+
+            console.log('Sending update with data:', updatedItem);
+            await BacklogItemService.update(itemToUpdate._id, updatedItem);
+            
+            // Update local state
+            setBacklogItems(prevItems =>
+                prevItems.map(item =>
+                    item._id === itemId ? { ...item, status: newStatus } : item
+                )
+            );
+        } catch (error) {
+            console.error('Error updating backlog item status:', error);
+            setError('Failed to update status. Error: ' + error.message);
+        }
+    };
+
+    const fetchBacklogItems = async () => {
+        try {
+            const response = await BacklogItemService.getAll();
+            console.log('Raw backlog items response:', response.data);
+            
+            // Filter backlog items for the current project using project._id
+            const projectBacklogItems = response.data.filter(item => 
+                item.project === project._id
+            );
+            console.log('Current project:', project);
+            console.log('Filtered backlog items:', projectBacklogItems);
+            setBacklogItems(projectBacklogItems);
+        } catch (error) {
+            console.error('Error fetching backlog items:', error);
+            setError(error.message);
+        }
+    };
+
+    useEffect(() => {
+        if (selectedType === 'backlogItems' && project?._id) {
+            fetchBacklogItems();
+        }
+    }, [selectedType, project?._id]);
+
+    const handleEditBacklogItem = (item) => {
+        // Implement edit backlog item logic
+    };
+
+    const handleDeleteBacklogItem = (itemId) => {
+        // Implement delete backlog item logic
+    };
+
+    const calculateSprintProgress = async (sprintId) => {
+        try {
+            const response = await BacklogItemService.getAll();
+            // Filter backlog items for this sprint
+            const sprintBacklogItems = response.data.filter(item => 
+                item.sprint === sprintId
+            );
+
+            if (sprintBacklogItems.length === 0) return 0;
+
+            // Count completed items (status === 'done')
+            const completedItems = sprintBacklogItems.filter(item => 
+                item.status === STATUS.DONE
+            ).length;
+
+            // Calculate percentage
+            const progress = (completedItems / sprintBacklogItems.length) * 100;
+            return Math.round(progress);
+        } catch (error) {
+            console.error('Error calculating sprint progress:', error);
+            return 0;
+        }
+    };
+
+    const updateSprintProgress = async () => {
+        const updatedSprints = await Promise.all(
+            sprints.map(async (sprint) => {
+                const progress = await calculateSprintProgress(sprint._id);
+                return { ...sprint, progress };
+            })
+        );
+        setSprints(updatedSprints);
+    };
+
+    useEffect(() => {
+        if (selectedType === 'sprints') {
+            updateSprintProgress();
+        }
+    }, [selectedType]);
+
+    // Add progress calculation when backlog items are updated
+    useEffect(() => {
+        if (backlogItems.length > 0) {
+            updateSprintProgress();
+        }
+    }, [backlogItems]);
+
+    const renderSprintsContent = () => {
         return (
-            <TableContainer component={Paper} elevation={0} sx={{ 
-                border: '1px solid #e2e8f0',
-                borderRadius: 2,
-                '& .MuiTableCell-head': {
-                    bgcolor: '#f8fafc',
-                    borderBottom: '2px solid #e2e8f0'
-                },
-                '& .MuiTableRow-root:hover': {
-                    bgcolor: '#f1f5f9'
-                },
-                '& .MuiTableCell-root': {
-                    borderColor: '#e2e8f0'
-                }
-            }}>
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Title</TableCell>
-                            <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Type</TableCell>
-                            <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Status</TableCell>
-                            <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Priority</TableCell>
-                            <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Assignee</TableCell>
-                            <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Due Date</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 600, color: '#475569' }}>Actions</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {issues.map((issue) => (
-                            <TableRow 
-                                key={issue._id}
+            <Box sx={{ p: 3 }}>
+                <Typography variant="h5" sx={{ mb: 3 }}>Sprints</Typography>
+                <Grid container spacing={3}>
+                    {sprints.map((sprint) => (
+                        <Grid item xs={12} md={6} lg={4} key={sprint._id}>
+                            <Card 
                                 sx={{ 
-                                    '&:last-child td, &:last-child th': { border: 0 },
-                                    '&:hover': { bgcolor: '#f8fafc' },
-                                    cursor: 'pointer'
+                                    height: '100%',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    position: 'relative'
                                 }}
-                                onClick={() => handleIssueClick(issue)}
                             >
-                                <TableCell sx={{ color: '#1e293b' }}>{issue.title}</TableCell>
-                                <TableCell>
-                                    <Chip 
-                                        label={issue.type || 'bug'} 
-                                        size="small"
-                                        sx={{ 
-                                            bgcolor: 
-                                                issue.type === 'bug' ? '#fee2e2' :
-                                                issue.type === 'feature' ? '#dbeafe' :
-                                                issue.type === 'improvement' ? '#dcfce7' : '#f1f5f9',
-                                            color: 
-                                                issue.type === 'bug' ? '#dc2626' :
-                                                issue.type === 'feature' ? '#2563eb' :
-                                                issue.type === 'improvement' ? '#059669' : '#475569',
-                                            textTransform: 'capitalize',
-                                            fontWeight: 500
-                                        }}
-                                    />
-                                </TableCell>
-                                <TableCell>
-                                    <Chip 
-                                        label={issue.status || 'open'} 
-                                        size="small"
-                                        sx={{ 
-                                            bgcolor: 
-                                                issue.status === 'closed' ? '#dcfce7' :
-                                                issue.status === 'in progress' ? '#dbeafe' : '#f1f5f9',
-                                            color: 
-                                                issue.status === 'closed' ? '#059669' :
-                                                issue.status === 'in progress' ? '#2563eb' : '#475569',
-                                            textTransform: 'capitalize',
-                                            fontWeight: 500
-                                        }}
-                                    />
-                                </TableCell>
-                                <TableCell>
-                                    <Chip 
-                                        label={issue.priority || 'low'} 
-                                        size="small"
-                                        sx={{ 
-                                            bgcolor: 
-                                                issue.priority === 'high' ? '#fee2e2' :
-                                                issue.priority === 'medium' ? '#fef3c7' : '#dbeafe',
-                                            color: 
-                                                issue.priority === 'high' ? '#dc2626' :
-                                                issue.priority === 'medium' ? '#d97706' : '#2563eb',
-                                            textTransform: 'capitalize',
-                                            fontWeight: 500
-                                        }}
-                                    />
-                                </TableCell>
-                                <TableCell>
-                                    {issue.assignee ? (
+                                <CardContent sx={{ flexGrow: 1 }}>
+                                    <Typography variant="h6" gutterBottom>
+                                        {sprint.name}
+                                    </Typography>
+                                    <Box sx={{ mb: 2 }}>
+                                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                                            Progress
+                                        </Typography>
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem' }}>
-                                                {issue.assignee.name[0]}
-                                            </Avatar>
-                                            <Typography variant="body2" sx={{ color: '#475569' }}>
-                                                {issue.assignee.name}
+                                            <Box sx={{ flexGrow: 1 }}>
+                                                <LinearProgress 
+                                                    variant="determinate" 
+                                                    value={sprint.progress || 0}
+                                                    sx={{
+                                                        height: 8,
+                                                        borderRadius: 4,
+                                                        backgroundColor: '#e2e8f0',
+                                                        '& .MuiLinearProgress-bar': {
+                                                            backgroundColor: 
+                                                                sprint.progress === 100 ? '#059669' :
+                                                                sprint.progress >= 70 ? '#3b82f6' :
+                                                                sprint.progress >= 30 ? '#f59e0b' : '#ef4444',
+                                                            borderRadius: 4
+                                                        }
+                                                    }}
+                                                />
+                                            </Box>
+                                            <Typography 
+                                                variant="body2" 
+                                                sx={{ 
+                                                    minWidth: 40,
+                                                    color: 
+                                                        sprint.progress === 100 ? '#059669' :
+                                                        sprint.progress >= 70 ? '#3b82f6' :
+                                                        sprint.progress >= 30 ? '#f59e0b' : '#ef4444'
+                                                }}
+                                            >
+                                                {sprint.progress || 0}%
                                             </Typography>
                                         </Box>
-                                    ) : '-'}
-                                </TableCell>
-                                <TableCell sx={{ color: '#475569' }}>
-                                    {issue.dueDate ? new Date(issue.dueDate).toLocaleDateString() : '-'}
-                                </TableCell>
-                                <TableCell align="right">
-                                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                                        <IconButton
-                                            size="small"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleIssueClick(issue);
-                                            }}
-                                            sx={{ color: '#3b82f6' }}
-                                        >
-                                            <VisibilityIcon fontSize="small" />
-                                        </IconButton>
-                                        <IconButton
-                                            size="small"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleEditIssue(issue);
-                                            }}
-                                            sx={{ color: '#3b82f6' }}
-                                        >
-                                            <EditIcon fontSize="small" />
-                                        </IconButton>
-                                        <IconButton
-                                            size="small"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDeleteIssue(issue._id);
-                                            }}
-                                            sx={{ color: '#ef4444' }}
-                                        >
-                                            <DeleteIcon fontSize="small" />
-                                        </IconButton>
                                     </Box>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Start Date: {new Date(sprint.startDate).toLocaleDateString()}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        End Date: {new Date(sprint.endDate).toLocaleDateString()}
+                                    </Typography>
+                                </CardContent>
+                                <CardActions>
+                                    <Button 
+                                        size="small" 
+                                        startIcon={<VisibilityIcon />}
+                                        onClick={() => handleSprintClick(sprint)}
+                                    >
+                                        View Details
+                                    </Button>
+                                </CardActions>
+                            </Card>
+                        </Grid>
+                    ))}
+                </Grid>
+            </Box>
         );
     };
 
@@ -2076,13 +2221,13 @@ const ProjectDetails = () => {
                                         />
                                         <FormControl fullWidth sx={{ mb: 2 }}>
                                             <Select
-                                                value={editedEpic?.status || 'to do'}
+                                                value={editedEpic?.status || STATUS.TODO}
                                                 onChange={(e) => handleEditEpicChange('status', e.target.value)}
                                                 displayEmpty
                                             >
-                                                <MenuItem value="to do">To Do</MenuItem>
-                                                <MenuItem value="in progress">In Progress</MenuItem>
-                                                <MenuItem value="done">Done</MenuItem>
+                                                <MenuItem value={STATUS.TODO}>To Do</MenuItem>
+                                                <MenuItem value={STATUS.IN_PROGRESS}>In Progress</MenuItem>
+                                                <MenuItem value={STATUS.DONE}>Done</MenuItem>
                                             </Select>
                                         </FormControl>
                                         <FormControl fullWidth sx={{ mb: 2 }}>

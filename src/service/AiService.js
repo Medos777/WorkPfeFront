@@ -1,32 +1,46 @@
 import httpClient from '../http-common';
 import TeamService from './TeamService';
 
-const API_KEY = 'sk-5f84c0819f044273a0ef89949fcae1d7';
+const API_KEY = 'AIzaSyDGiyo_nl9XPZ1FQbBZDEI4c6zRdXhJVrA';
 
 const generateAiResponse = async (prompt, context = {}) => {
     try {
-        const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        const response = await fetch('https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${API_KEY}`
+                'x-goog-api-key': API_KEY
             },
             body: JSON.stringify({
-                model: "deepseek-chat",
-                messages: [
-                    { 
-                        role: "system", 
-                        content: "You are a project management AI assistant specialized in project planning and estimation. Respond in valid JSON format only. No additional text or explanations outside the JSON structure."
-                    },
-                    { role: "user", content: prompt }
+                contents: [
+                    {
+                        role: "user",
+                        parts: [{ text: prompt }]
+                    }
                 ],
-                temperature: 0.3,
-                max_tokens: 1000,
-            }),
+                generationConfig: {
+                    temperature: 0.7,
+                    topK: 40,
+                    topP: 0.95,
+                }
+            })
         });
 
         const data = await response.json();
-        return data.choices[0].message.content;
+        
+        // Check if there's an error in the response
+        if (data.error) {
+            throw new Error(data.error.message || 'Error from Gemini API');
+        }
+
+        // The correct path to the generated text in Gemini's response
+        if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+            return data.candidates[0].content.parts[0].text;
+        } else if (data.promptFeedback) {
+            throw new Error(data.promptFeedback.blockReason || 'Content blocked by Gemini API');
+        } else {
+            throw new Error('Unexpected response structure from Gemini API');
+        }
     } catch (error) {
         console.error('Error generating AI response:', error);
         throw error;
